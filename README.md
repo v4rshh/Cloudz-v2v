@@ -29,6 +29,44 @@ Cloudz-v2v is an intelligent, AI-powered women's safety platform combining safe 
 
 ---
 
+## 📋 Functional Requirements & Scope
+
+Requirements are prioritized to ensure rapid scope decisions during hackathon build phases:
+
+### 🔴 MUST (Core Demo Path)
+*   **FR1 — VibeRoute: Safety-Scored Navigation**:
+    *   User enters start & destination; app returns both fastest and "safest" routes.
+    *   Each route segment is color-coded by computed safety score.
+    *   Safety score is a weighted function of incident density, time-of-day, and proximity to "safe nodes" (police, hospitals, 24h businesses).
+    *   Users can drop "vibe tags" on blocks (e.g. "unlit alley", "crowded area") to immediately update the scoring model.
+*   **FR2 — Anonymous Incident Reporting & Live Heatmap**:
+    *   One-tap report (type, auto-location, optional note) with zero account details required.
+    *   Reports render on a live heatmap in near-real-time and feed the FR1 navigation scoring engine.
+*   **FR3 — One-Tap GhostCall**:
+    *   A single control launches a full-screen simulated native incoming call screen.
+    *   Realistic ringtone plays; answering plays a pre-generated voice clip of a real person speaking.
+    *   No confirmation step (triggerable in under 2 taps from anywhere).
+*   **FR4 — ShadowStream: SOS & Live Tracking**:
+    *   One-tap SOS immediately broadcasts GPS location updates.
+    *   Sends SMS automatically to trusted contacts with a secure, unindexed tracking web link.
+    *   The link opens a live map showing position updates in real-time with no login or app install required for the contact.
+*   **FR5 — Trusted Contacts Management**:
+    *   Add, edit, and remove trusted contacts (name + phone number) ahead of time.
+
+### 🟡 STRETCH (Built if core path completes early)
+*   **FR6 — AuraSense Companion Mode**:
+    *   Stealth display (looks powered-off to onlookers) that keeps screen alive via browser Wake Lock API.
+    *   Periodic "Are you OK?" prompts, escalating automatically to FR4 (SOS) if ignored.
+*   **FR7 — Follow Me / Deviation Alerts**:
+    *   Share live walk with a friend, auto-alerting on unexpected stops or path deviations.
+
+### ❌ CUT (Explicitly out of scope)
+*   **Continuous Background Audio Threat Detection**: Blocked by iOS Safari killing microphone access on screen lock.
+*   **Native iOS/Android Apps (React Native)**: Cut to prioritize a zero-friction mobile Web PWA.
+*   **Infrastructure Overhead**: Self-hosted routing engines (OSRM), standalone Python microservices, and S3 evidence encryption.
+
+---
+
 ## 🛠️ Tech Stack
 
 ### 1. Frontend Web Client (`/frontend`)
