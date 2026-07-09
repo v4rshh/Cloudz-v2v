@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Node
 node_modules/
 npm-debug.log*
@@ -22,7 +21,6 @@ mobile-app/android/app/build/
 
 # OS
 .DS_Store
-=======
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -64,4 +62,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
->>>>>>> 196969c3b80008806ab4b2e827b94ed684c898ab

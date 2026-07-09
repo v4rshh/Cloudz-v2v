@@ -1,120 +1,142 @@
-<<<<<<< HEAD
-# SafeRoute AI — Premium Safety Navigation & Emergency Response Web Application
+# Cloudz-v2v — Premium Safety Navigation & Emergency Response Web Application
 
-SafeRoute AI is an intelligent, AI-powered women's safety platform combining safe navigation, a RAG-powered safety assistant ("Sahara"), smart incident reporting, and emergency SOS response, now fully built as a modern web application dashboard.
-
-## Project Structure
-
-```
-saferoute-ai/
-├── frontend/            # React + Vite web application dashboard (Leaflet maps, Sahara RAG chat, SOS webcams)
-├── backend/             # Node.js + Express API (auth, navigation, reports, SOS, chat proxy)
-├── ai-services/         # Python FastAPI services (RAG assistant, NLP classifier, risk model, anomaly detection)
-├── mobile-app/          # React Native app skeleton
-├── docs/                # Architecture & design docs
-├── docker-compose.yml   # Local dev orchestration
-└── .env.example         # Environment variable template
-```
+Cloudz-v2v is an intelligent, AI-powered women's safety platform combining safe navigation, a RAG-powered safety assistant ("Sahara"), smart incident reporting, and emergency SOS response. Both the web client and backend API are fully built in **TypeScript** for robust compile-time safety.
 
 ---
 
-## Features Implemented in the Web Dashboard
+## 🌟 Features Implemented in the Web Dashboard
 
 ### 1. Interactive Safety Map
-- Styled with a premium dark map overlay using **Leaflet** (`react-leaflet`).
-- Renders safety-scored routes (Safest, Well-Lit, Fastest) in distinct colors.
-- Features dynamic toggles for a crowdsourced **Risk Heatmap**, streetlights, and foot traffic layers.
+*   **Aesthetics**: Styled with a premium dark map overlay using **Leaflet** (`react-leaflet`).
+*   **Routing**: Renders safety-scored routes (Safest, Well-Lit, Fastest) in distinct colors.
+*   **Toggles**: Features dynamic checkbox overlays for crowdsourced risk heatmaps, streetlights, and traffic layers.
 
 ### 2. Sahara AI Safety Assistant
-- Grounded glassmorphic chat interface.
-- Returns safety answers and displays verified legal source citations.
-- Integrates a real-time crisis keyword scanner: typing expressions like *"someone is following me"* automatically redirects the interface to the SOS Hub.
+*   **Interface**: Grounded glassmorphic chat layout with automatic scrollbars.
+*   **Citations**: Returns safety answers and displays verified legal source citations.
+*   **Crisis Interception**: Real-time crisis keyword scanner: typing expressions like *"someone is following me"* automatically redirects the interface to the SOS Hub.
 
 ### 3. Smart Incident Reporting
-- Allows users to describe situations in free text.
-- Automatically tags incident category and severity via backend NLP classifier services.
-- Displays an AI review step letting users confirm or adjust tags before submission.
-- Includes a community feed where other users upvote or downvote reports to verify credibility.
+*   **Tagging**: Automatically tags incident category and severity via backend NLP classifier services.
+*   **Review Flow**: Displays an AI review step letting users confirm or adjust tags before submission.
+*   **Credibility**: Includes a community feed where other users upvote or downvote reports to verify credibility.
 
 ### 4. Emergency SOS Hub
-- Giant pulsating SOS panic button with a cancellable 5-second countdown.
-- Synthesizes a real police siren audio alarm using the browser's native HTML5 **AudioContext** API.
-- Automatically requests webcam and microphone access to display a live feed and simulate secure cloud evidence recording.
-- Includes a "Follow Me" live tracking simulation with automatic path-deviation alarms and soft check-in verification triggers.
+*   **Panic Button**: Giant pulsating SOS button with a cancellable 5-second countdown.
+*   **Alarm**: Synthesizes a real police siren audio alarm using the browser's native HTML5 **AudioContext** API.
+*   **Evidence Recording**: Requests webcam access to display a live feed and simulate secure cloud evidence recording.
+*   **Follow Me**: Live tracking simulation with automatic path-deviation alarms and soft check-in verification triggers.
 
 ---
 
-## Quick Start (Local Development)
+## 🛠️ Tech Stack
 
-All services are configured for local development.
+### 1. Frontend Web Client (`/frontend`)
+*   **Core**: React (v19) + Vite (v8) + TypeScript
+*   **Mapping**: Leaflet (`leaflet`, `react-leaflet`) with premium dark spatial tile overlays
+*   **Icons**: Lucide React (`lucide-react`)
+*   **Networking & Real-Time**: Axios client gateway + Socket.io-client for live location broadcasting
+*   **Styling**: Pure Vanilla CSS system (`index.css`) with curated dark-theme HSL color tokens and glassmorphism elements
 
-### 1. Clone & Configure Environment
-Create a `.env` file in the root folder (preconfigured templates are ready):
-```bash
+### 2. Backend API Gateway (`/backend`)
+*   **Core**: Node.js + Express + TypeScript (`ts-node-dev` for hot-reloading development compiler)
+*   **Security & Auth**: JWT (`jsonwebtoken`) OTP-verification bypass stubs (accepts any 6-digit code for testing)
+*   **Real-time channels**: Socket.io server supporting live coordinator room connection
+*   **Database Schema**: Raw SQL tables definition supporting PostGIS spatial indexing (ready for PostgreSQL)
+
+### 3. AI Microservice (`/ai-services`)
+*   **Core**: Python 3.14 + FastAPI + Uvicorn
+*   **RAG Engine**: Pure Python TF-IDF database index compiler (`ingest.py`) + Cosine Similarity ranking matches retriever (`retriever.py`)
+*   **Language Model**: Google Gemini API integration (supporting `gemini-2.5-flash`, `gemini-3.5-flash`, and `gemini-flash-latest`)
+*   **Offline Fallback**: Resilient keyless mode mapping text segments and local emergency guide citations directly to the UI if no API key is provided
+*   **Incident Classifier**: NLP keyword scanner ranking category and severity from 1 (low) to 5 (critical)
+
+---
+
+## 📂 Project Structure
+
+```text
+Cloudz-v2v/
+├── frontend/            # React + Vite TypeScript client dashboard (maps, Sahara RAG chat, SOS webcams)
+├── backend/             # Node.js + Express TypeScript API gateway (auth, navigation proxy, SOS channels)
+├── ai-services/         # Python FastAPI AI microservice (RAG, NLP classifier, deviation anomalies)
+│   ├── main.py          # FastAPI startup and endpoints routing
+│   └── rag/             # RAG pipeline directory
+│       ├── documents/   # Safety manuals folder (rotterdam_safety_guide.md)
+│       └── rag_store.json # Local TF-IDF indexed database
+├── docs/                # Architecture and specifications overview
+├── docker-compose.yml   # Multi-service dev orchestration
+├── tsconfig.json        # Root compiler configuration rules
+└── .env                 # Environment config file (holding API keys)
+```
+
+---
+
+## 🚀 Setup & Launch Instructions
+
+Follow these instructions in three separate terminal tabs:
+
+### 1. Root Configuration
+Create your environment file in the project root:
+```powershell
+# Copy the template to active config
 cp .env.example .env
 ```
+*(Open `.env` and fill in your optional `GEMINI_API_KEY=AIzaSy...` key. If left blank, Sahara will dynamically fall back to offline local citations search).*
 
-### 2. Start Python AI Services
-Installs the lightweight FastAPI, uvicorn, and pydantic dependencies and starts the server on port 8000:
-```bash
-cd ai-services
-pip install fastapi uvicorn pydantic python-dotenv
-python -m uvicorn main:app --port 8000
-```
-*AI Health Check:* `GET http://localhost:8000/health`
+---
 
-### 3. Start Node.js Backend Server
-Installs Express and Socket.io dependencies and runs on port 4000:
-```bash
-cd backend
-npm install
-npm start
-```
-*Backend Health Check:* `GET http://localhost:4000/health`
+### Tab 1: Start Python AI Services
+1. Navigate to the folder and install dependencies:
+   ```powershell
+   cd ai-services
+   pip install fastapi uvicorn pydantic python-dotenv google-generativeai
+   ```
+2. Run document ingestion once to build the local index database:
+   ```powershell
+   cd rag
+   python ingest.py
+   cd ..
+   ```
+3. Start the FastAPI microservice on port 8000:
+   ```powershell
+   python -m uvicorn main:app --port 8000
+   ```
+   *Health Check endpoint:* `GET http://localhost:8000/health`
 
-### 4. Start the Web Frontend
-Installs the React packages and runs the hot-reloading development server on port 5173:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Open **[http://localhost:5173/](http://localhost:5173/)** in your browser to interact with the dashboard.
-=======
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+---
 
-## Getting Started
+### Tab 2: Start Node.js Express Gateway
+1. Navigate to the folder and install dependencies:
+   ```powershell
+   cd backend
+   npm install
+   ```
+2. Start the hot-reloading development server on port 4000:
+   ```powershell
+   npm start
+   ```
+   *Health Check endpoint:* `GET http://localhost:4000/health`
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Tab 3: Start Vite Web Frontend
+1. Navigate to the folder and install dependencies:
+   ```powershell
+   cd frontend
+   npm install
+   ```
+2. Start the Vite hot-reloading client on port 5173:
+   ```powershell
+   npm run dev
+   ```
+3. Open your browser and go to **[http://localhost:5173/](http://localhost:5173/)** to access the premium web dashboard.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🔬 Testing Dashboard Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
->>>>>>> 196969c3b80008806ab4b2e827b94ed684c898ab
+Once the 3 services are running, verify the following:
+*   **Ask Sahara (RAG Chat)**: Go to "Ask Sahara" and search: *"What is the police number in Rotterdam?"* Sahara will retrieve contacts and laws from your local safety document, citing them as clickable badges.
+*   **Automatic Intercept**: Type *"someone is following me"* in the Sahara chat. It will intercept the message, trigger an alert modal, and redirect you to the SOS Panel.
+*   **Emergency SOS**: Click the giant SOS button. The browser will beep a synthesized siren, countdown 5 seconds, and request webcam access for evidence logging.
