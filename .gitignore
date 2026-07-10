@@ -1,3 +1,26 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# Build artifacts
+dist/
+build/
+
+# React Native
+mobile-app/ios/Pods/
+mobile-app/android/app/build/
+*.log
+
+# OS
+.DS_Store
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies

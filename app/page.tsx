@@ -1,29 +1,29 @@
-import Link from "next/link";
+"use client";
 
-export default function Home() {
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function LandingPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("safesphere_session_token", "direct-login-token-stub");
+      localStorage.setItem("user_phone", "+31 6 12345678");
+    }
+    router.replace("/dashboard");
+  }, [router]);
+
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-center gap-8 p-8">
-      <div>
-        <h1 className="text-3xl font-semibold text-zinc-900">SafeSphere</h1>
-        <p className="mt-2 text-zinc-600">
-          Women&apos;s safety PWA — backend critical path is live.
-        </p>
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white font-sans">
+      <div className="flex flex-col items-center gap-4">
+        <div className="size-12 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 font-extrabold text-xl animate-bounce">
+          C
+        </div>
+        <div className="text-sm font-semibold tracking-wider text-teal-400 animate-pulse uppercase">
+          Bypassing Authentication...
+        </div>
       </div>
-
-      <nav className="flex flex-col gap-3 text-lg">
-        <Link href="/auth" className="rounded border border-zinc-300 px-4 py-3 hover:bg-zinc-50">
-          Sign in (Phone OTP)
-        </Link>
-        <Link href="/sos" className="rounded bg-red-600 px-4 py-3 text-white hover:bg-red-700">
-          SOS Trigger (ShadowStream)
-        </Link>
-      </nav>
-
-      <p className="text-sm text-zinc-500">
-        Team: run <code className="rounded bg-zinc-100 px-1">supabase/schema.sql</code> in the
-        Supabase SQL editor, then set env vars from{" "}
-        <code className="rounded bg-zinc-100 px-1">.env.example</code>.
-      </p>
     </div>
   );
 }
