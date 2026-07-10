@@ -6,7 +6,6 @@ For system diagrams and data-flow detail, see [`docs/architecture.md`](docs/arch
 
 ---
 
-## Team Ownership
 
 ### VibeRoute — Maps & Safety Score
 
@@ -260,13 +259,3 @@ Enable the **PostGIS** extension in Supabase and turn on **Realtime** for `sos_e
 
 ---
 
-## Testing Checklist
-
-- [ ] VibeRoute renders three routes with safety score pills on Mapbox (or offline mock)
-- [ ] Click map canvas → vibe tag form → marker appears
-- [ ] Submit anonymous report → NLP classification review → appears in community feed
-- [ ] GhostCall rings, answers with voice line, ends cleanly
-- [ ] SOS countdown → siren → webcam → SMS stub/log with tracking URL
-- [ ] `/track/[id]` shows live marker updates via Supabase Realtime (or mock interval)
-- [ ] Sahara returns cited answers; crisis keywords redirect to SOS tab
-- [ ] Trusted contacts persist in localStorage via Profile Settings

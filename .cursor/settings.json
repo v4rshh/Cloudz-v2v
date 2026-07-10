@@ -1,7 +1,0 @@
-{
-  "plugins": {
-    "twilio-developer-kit": {
-      "enabled": true
-    }
-  }
-}
