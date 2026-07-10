@@ -99,21 +99,6 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
     }
   };
 
-  // Fix 1a: Handle Main Countdown Completion cleanly outside of render/state updates
-  useEffect(() => {
-    if (activeSosState === "counting" && countdown === 0) {
-      triggerSOSEngine();
-    }
-  }, [countdown, activeSosState]);
-
-  // Fix 1b: Handle Anomaly Countdown Completion cleanly outside of render/state updates
-  useEffect(() => {
-    if (anomalyCheckIn && checkInCountdown === 0) {
-      setAnomalyCheckIn(false);
-      triggerSOSEngine();
-    }
-  }, [checkInCountdown, anomalyCheckIn]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = localStorage.getItem("trusted_contacts");
@@ -165,7 +150,6 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
     setCountdown(5);
     playSiren();
     
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     countdownIntervalRef.current = setInterval(() => {
       playSiren();
       setCountdown((prev) => {
@@ -196,7 +180,6 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
     setCurrentCoords(coords);
 
     try {
-      // Fix 2: Changed userId to null to comply with Backend UUID parsing expectations
       const res = await fetch("/api/sos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -300,7 +283,7 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: null, // Unified alignment with null UUID logic
+            userId: "demo-web-user",
             route: { origin: [4.47917, 51.9225], destination: [4.4860, 51.9160] }
           })
         });

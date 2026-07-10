@@ -18,6 +18,7 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
   
   const ringtoneIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const companionVoiceRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -60,8 +61,9 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
   };
 
   const cancelSpeech = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (companionVoiceRef.current) {
+      companionVoiceRef.current.pause();
+      companionVoiceRef.current = null;
     }
   };
 
@@ -134,15 +136,20 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
     stopRingtone();
     setCallState("connected");
     
-    // Simulate real nearby companion voice over the speaker using SpeechSynthesis (Text-to-Speech)
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    try {
+      const audio = new Audio("/audio/ghostcall.mp3");
+      companionVoiceRef.current = audio;
+      
+      // Delay play by 800ms for realistic connection delay
       setTimeout(() => {
-        const speech = new SpeechSynthesisUtterance(dialogueLine);
-        speech.rate = 0.95; // Slightly slower, more natural pace
-        speech.pitch = 1.0;
-        window.speechSynthesis.speak(speech);
+        if (companionVoiceRef.current) {
+          audio.play().catch((err) => {
+            console.warn("Autoplay block or audio failure:", err);
+          });
+        }
       }, 800);
+    } catch (e) {
+      console.error("Failed to load or play local audio clip:", e);
     }
   };
 

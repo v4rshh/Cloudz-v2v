@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { createServiceClient, isSupabaseConfigured } from "@/lib/supabase";
 
+// NOTE: this route targets a "users" table that isn't part of the current
+// supabase/schema.sql (profiles + auth.users are used elsewhere in this app).
+// Casting to `any` here only unblocks the TypeScript build — it does not fix
+// the underlying schema mismatch, which is outside VibeRoute's scope.
+const supabase = isSupabaseConfigured ? (createServiceClient() as any) : null;
+
 export async function POST(request: Request) {
   try {
     const { phone, email, language_pref } = await request.json();
@@ -10,10 +16,9 @@ export async function POST(request: Request) {
     }
 
     if (isSupabaseConfigured) {
-      const supabase = createServiceClient();
       const { data, error } = await supabase
         .from("users")
-        .insert({ phone, email, language_pref } as never)
+        .insert({ phone, email, language_pref })
         .select()
         .single();
 
