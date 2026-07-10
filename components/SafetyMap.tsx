@@ -455,43 +455,43 @@ export default function SafetyMap() {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="mb-4 grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={() => setClickMode(clickMode === "start" ? "off" : "start")}
-            className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
+            className={`flex items-center justify-center gap-2 rounded-xl border py-3 px-4 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] ${
               clickMode === "start" 
-                ? "border-teal-500 bg-teal-500/20 text-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.15)]" 
-                : "border-white/5 bg-slate-900/60 text-slate-300 hover:border-white/20 hover:bg-slate-900"
+                ? "border-teal-400 bg-teal-500/25 text-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.25)]" 
+                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-teal-500/30 hover:bg-teal-500/5 hover:text-white"
             }`}
           >
-            <span className="text-lg">📍</span>
-            <span>{clickMode === "start" ? "Tap Map…" : "Set Start"}</span>
+            <span className="text-sm">📍</span>
+            <span>{clickMode === "start" ? "Tap Map…" : "Set start on map"}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setClickMode(clickMode === "end" ? "off" : "end")}
-            className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
+            className={`flex items-center justify-center gap-2 rounded-xl border py-3 px-4 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] ${
               clickMode === "end" 
-                ? "border-rose-500 bg-rose-500/20 text-rose-300 shadow-[0_0_15px_rgba(251,113,133,0.15)]" 
-                : "border-white/5 bg-slate-900/60 text-slate-300 hover:border-white/20 hover:bg-slate-900"
+                ? "border-rose-400 bg-rose-500/25 text-rose-300 shadow-[0_0_15px_rgba(251,113,133,0.25)]" 
+                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-rose-500/30 hover:bg-rose-500/5 hover:text-white"
             }`}
           >
-            <span className="text-lg">🏁</span>
-            <span>{clickMode === "end" ? "Tap Map…" : "Set End"}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleRoute}
-            disabled={loading}
-            className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-teal-600 text-white p-2.5 text-xs font-bold transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
-          >
-            <span className="text-lg">🧭</span>
-            <span>{loading ? "Routing…" : "Get Route"}</span>
+            <span className="text-sm">🏁</span>
+            <span>{clickMode === "end" ? "Tap map…" : "Set end on map"}</span>
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={handleRoute}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-3.5 px-4 text-sm font-bold tracking-wider transition-all duration-300 cursor-pointer hover:from-teal-400 hover:to-emerald-500 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_4px_15px_rgba(20,184,166,0.3)] hover:shadow-[0_6px_25px_rgba(20,184,166,0.5)]"
+        >
+          <span className="text-sm">🧭</span>
+          <span>{loading ? "Finding safest route…" : "Get route"}</span>
+        </button>
 
         {routes.length > 0 && (
           <div className="mt-3 flex gap-2">
