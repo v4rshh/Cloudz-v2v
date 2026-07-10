@@ -142,7 +142,6 @@ export default function SafetyMap() {
       center: ROTTERDAM,
       zoom: 13.5,
       pitch: 35,
-      antialias: true
     });
 
     mapRef.current = map;

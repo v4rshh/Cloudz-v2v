@@ -23,6 +23,7 @@ import {
   type SafetyReport,
   type ReportClassification,
 } from "@/lib/reports";
+import Link from "next/link";
 
 type ClickMode = "off" | "start" | "end" | "report";
 type RouteKind = "fastest" | "safest";
@@ -364,20 +365,22 @@ export default function VibeRoutePage() {
     <div className="relative h-screen w-screen overflow-hidden bg-slate-950 text-white">
       <div ref={mapContainerRef} className="h-full w-full" />
 
-      <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-md">
+      <Link
+        href="/dashboard"
+        className="absolute left-4 top-4 z-10 rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-md transition hover:border-teal-500/40"
+      >
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-400">SafeSphere</p>
         <h1 className="text-sm font-semibold text-white">VibeRoute</h1>
         <p className="mt-1 text-xs text-slate-400">Step 5 · Real backend integration</p>
-      </div>
+      </Link>
 
       <button
         type="button"
         onClick={() => setClickMode(clickMode === "report" ? "off" : "report")}
-        className={`absolute right-4 top-24 z-10 rounded-lg border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition ${
-          clickMode === "report"
+        className={`absolute right-4 top-24 z-10 rounded-lg border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition ${clickMode === "report"
             ? "border-amber-400 bg-amber-500/20 text-amber-200"
             : "border-white/10 bg-slate-950/85 text-slate-200 hover:border-white/20"
-        }`}
+          }`}
       >
         {clickMode === "report" ? "Tap map to flag…" : "⚠ Report unsafe spot"}
       </button>
@@ -459,18 +462,16 @@ export default function VibeRoutePage() {
           <button
             type="button"
             onClick={() => setClickMode(clickMode === "start" ? "off" : "start")}
-            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-              clickMode === "start" ? "border-teal-500 bg-teal-500/20 text-teal-300" : "border-white/10 bg-slate-900 text-slate-300 hover:border-white/20"
-            }`}
+            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${clickMode === "start" ? "border-teal-500 bg-teal-500/20 text-teal-300" : "border-white/10 bg-slate-900 text-slate-300 hover:border-white/20"
+              }`}
           >
             {clickMode === "start" ? "Tap map…" : "Set start on map"}
           </button>
           <button
             type="button"
             onClick={() => setClickMode(clickMode === "end" ? "off" : "end")}
-            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-              clickMode === "end" ? "border-rose-500 bg-rose-500/20 text-rose-300" : "border-white/10 bg-slate-900 text-slate-300 hover:border-white/20"
-            }`}
+            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition ${clickMode === "end" ? "border-rose-500 bg-rose-500/20 text-rose-300" : "border-white/10 bg-slate-900 text-slate-300 hover:border-white/20"
+              }`}
           >
             {clickMode === "end" ? "Tap map…" : "Set end on map"}
           </button>
@@ -491,9 +492,8 @@ export default function VibeRoutePage() {
               <button
                 type="button"
                 onClick={() => setActiveKind("fastest")}
-                className={`flex-1 rounded-lg border px-3 py-2 text-left transition ${
-                  activeKind === "fastest" ? "border-teal-500 bg-teal-500/10" : "border-white/10 bg-slate-900"
-                }`}
+                className={`flex-1 rounded-lg border px-3 py-2 text-left transition ${activeKind === "fastest" ? "border-teal-500 bg-teal-500/10" : "border-white/10 bg-slate-900"
+                  }`}
               >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-teal-400">Fastest</p>
                 <p className="text-xs text-slate-300">
@@ -509,9 +509,8 @@ export default function VibeRoutePage() {
               <button
                 type="button"
                 onClick={() => setActiveKind("safest")}
-                className={`flex-1 rounded-lg border px-3 py-2 text-left transition ${
-                  activeKind === "safest" ? "border-violet-400 bg-violet-500/10" : "border-white/10 bg-slate-900"
-                }`}
+                className={`flex-1 rounded-lg border px-3 py-2 text-left transition ${activeKind === "safest" ? "border-violet-400 bg-violet-500/10" : "border-white/10 bg-slate-900"
+                  }`}
               >
                 <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">Safest</p>
                 <p className="text-xs text-slate-300">
