@@ -12,6 +12,9 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
   // Call States: "incoming" | "connected" | "ended"
   const [callState, setCallState] = useState<"incoming" | "connected" | "ended">("incoming");
   const [seconds, setSeconds] = useState(0);
+  const [dialogueLine, setDialogueLine] = useState<string>(
+    "Hey! Where are you? I'm walking near the main street right now, I will meet you in two minutes. Just stay on the line, I am right around the corner."
+  );
   
   const ringtoneIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -21,11 +24,46 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
       setCallState("incoming");
       setSeconds(0);
       playRingtoneLoop();
+      void fetchDialogue();
     } else {
       stopRingtone();
+      cancelSpeech();
     }
-    return () => stopRingtone();
+    return () => {
+      stopRingtone();
+      cancelSpeech();
+    };
   }, [isOpen]);
+
+  const fetchDialogue = async () => {
+    try {
+      const situations = [
+        "walking down a dark unlit corridor",
+        "suspicious person tailing on street corner",
+        "alone waiting at a quiet transit stop",
+        "uncomfortable group standing outside entrance"
+      ];
+      const randomSituation = situations[Math.floor(Math.random() * situations.length)];
+
+      const res = await fetch("/api/ghostcall", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ situation: randomSituation })
+      });
+      const data = await res.json();
+      if (data.dialogue) {
+        setDialogueLine(data.dialogue);
+      }
+    } catch (err) {
+      console.warn("Failed to load dynamic call dialogue:", err);
+    }
+  };
+
+  const cancelSpeech = () => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  };
 
   // Connect duration counter
   useEffect(() => {
@@ -98,10 +136,9 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
     
     // Simulate real nearby companion voice over the speaker using SpeechSynthesis (Text-to-Speech)
     if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
       setTimeout(() => {
-        const speech = new SpeechSynthesisUtterance(
-          "Hey! Where are you? I'm walking near the main street right now, I will meet you in two minutes. Just stay on the line, I am right around the corner."
-        );
+        const speech = new SpeechSynthesisUtterance(dialogueLine);
         speech.rate = 0.95; // Slightly slower, more natural pace
         speech.pitch = 1.0;
         window.speechSynthesis.speak(speech);
@@ -111,6 +148,7 @@ export default function GhostCall({ isOpen, onClose }: GhostCallProps) {
 
   const handleDecline = () => {
     stopRingtone();
+    cancelSpeech();
     setCallState("ended");
     setTimeout(() => {
       onClose();

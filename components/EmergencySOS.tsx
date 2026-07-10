@@ -155,7 +155,9 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
       setCountdown((prev) => {
         if (prev <= 1) {
           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          triggerSOSEngine();
+          setTimeout(() => {
+            triggerSOSEngine();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -325,8 +327,10 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
       setCheckInCountdown((prev) => {
         if (prev <= 1) {
           if (checkInIntervalRef.current) clearInterval(checkInIntervalRef.current);
-          setAnomalyCheckIn(false);
-          triggerSOSEngine();
+          setTimeout(() => {
+            setAnomalyCheckIn(false);
+            triggerSOSEngine();
+          }, 0);
           return 0;
         }
         return prev - 1;

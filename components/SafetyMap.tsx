@@ -144,11 +144,17 @@ export default function SafetyMap() {
     reportMarkersRef.current.forEach((m) => m.remove());
     reportMarkersRef.current = list.map((r) => {
       const popupHtml = `
-        <strong style="text-transform:capitalize;">${r.category} · severity ${r.severity}/5</strong>
-        <p style="margin-top:4px;">${escapeHtml(r.raw_text)}</p>
-        <p style="margin-top:4px;font-size:10px;opacity:0.6;">
-          ${new Date(r.created_at).toLocaleDateString()} · confidence ${Math.round(r.confidence_score * 100)}%
-        </p>
+        <div style="color: #0f172a; font-family: sans-serif; min-width: 200px; padding: 4px;">
+          <strong style="text-transform:capitalize; color: #e11d48; font-size: 13px; font-weight: 700; display: block; margin-bottom: 4px;">
+            ${r.category} · Severity ${r.severity}/5
+          </strong>
+          <p style="margin-top: 4px; font-size: 12px; color: #334155; line-height: 1.4; font-weight: 500;">
+            ${escapeHtml(r.raw_text)}
+          </p>
+          <div style="margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 10px; color: #64748b;">
+            ${new Date(r.created_at).toLocaleDateString()} · Confidence ${Math.round(r.confidence_score * 100)}%
+          </div>
+        </div>
       `;
       return new maplibregl.Marker({ element: createReportMarkerElement(r.severity), anchor: "center" })
         .setLngLat(r.coords)
@@ -459,26 +465,24 @@ export default function SafetyMap() {
           <button
             type="button"
             onClick={() => setClickMode(clickMode === "start" ? "off" : "start")}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-3 px-4 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] ${
+            className={`flex items-center justify-center rounded-xl py-3 px-4 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98] ${
               clickMode === "start" 
-                ? "border-teal-400 bg-teal-500/25 text-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.25)]" 
-                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-teal-500/30 hover:bg-teal-500/5 hover:text-white"
+                ? "bg-teal-500 text-slate-950 font-bold shadow-[0_0_15px_rgba(45,212,191,0.35)]" 
+                : "bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white"
             }`}
           >
-            <span className="text-sm">📍</span>
-            <span>{clickMode === "start" ? "Tap Map…" : "Set start on map"}</span>
+            <span>{clickMode === "start" ? "Tap map…" : "Set start on map"}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setClickMode(clickMode === "end" ? "off" : "end")}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-3 px-4 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] ${
+            className={`flex items-center justify-center rounded-xl py-3 px-4 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98] ${
               clickMode === "end" 
-                ? "border-rose-400 bg-rose-500/25 text-rose-300 shadow-[0_0_15px_rgba(251,113,133,0.25)]" 
-                : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-rose-500/30 hover:bg-rose-500/5 hover:text-white"
+                ? "bg-rose-500 text-white font-bold shadow-[0_0_15px_rgba(251,113,133,0.35)]" 
+                : "bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white"
             }`}
           >
-            <span className="text-sm">🏁</span>
             <span>{clickMode === "end" ? "Tap map…" : "Set end on map"}</span>
           </button>
         </div>
@@ -487,9 +491,8 @@ export default function SafetyMap() {
           type="button"
           onClick={handleRoute}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-3.5 px-4 text-sm font-bold tracking-wider transition-all duration-300 cursor-pointer hover:from-teal-400 hover:to-emerald-500 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_4px_15px_rgba(20,184,166,0.3)] hover:shadow-[0_6px_25px_rgba(20,184,166,0.5)]"
+          className="w-full flex items-center justify-center rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-3.5 px-4 text-sm font-bold tracking-wider transition-all duration-300 cursor-pointer hover:from-teal-400 hover:to-emerald-500 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_4px_15px_rgba(20,184,166,0.3)] hover:shadow-[0_6px_25px_rgba(20,184,166,0.5)]"
         >
-          <span className="text-sm">🧭</span>
           <span>{loading ? "Finding safest route…" : "Get route"}</span>
         </button>
 
