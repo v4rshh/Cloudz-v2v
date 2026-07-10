@@ -2,20 +2,28 @@ import { NextResponse } from "next/server";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { sendSosSmsAlerts, type EmergencyContact } from "@/lib/twilio";
 
+type SosRequestBody = {
+  userId?: string | null;
+  triggerType?: string;
+  location?: { lat: number; lng: number };
+  emergencyContacts?: any[];
+  // Fallback fields from main
+  lat?: number;
+  lng?: number;
+};
+
 export async function POST(request: Request) {
   try {
-    const { userId, triggerType, location, emergencyContacts } = await request.json();
-
-    if (!userId || !triggerType || !location) {
-      return NextResponse.json(
-        { error: "userId, triggerType, and location are required" },
-        { status: 400 }
-      );
-    }
+    const body: SosRequestBody = await request.json();
+    
+    const userId = body.userId || "demo-web-user";
+    const triggerType = body.triggerType || "button";
+    const location = body.location || { lat: body.lat || 51.9225, lng: body.lng || 4.47917 };
+    const emergencyContacts = body.emergencyContacts || [];
 
     if (typeof location.lat !== "number" || typeof location.lng !== "number") {
       return NextResponse.json(
-        { error: "location must include numeric lat and lng" },
+        { error: "location/coordinates must include numeric lat and lng" },
         { status: 400 }
       );
     }
@@ -31,9 +39,12 @@ export async function POST(request: Request) {
       })
     );
 
+    // Trigger Twilio SMS alerts
     const sms = await sendSosSmsAlerts(contacts, trackLink, location);
 
+    // Write to Supabase if configured
     if (isSupabaseConfigured) {
+      // Try raw insert first
       const { data, error } = await supabase
         .from("sos_events")
         .insert({
@@ -51,7 +62,28 @@ export async function POST(request: Request) {
         .single();
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("Supabase insert failed, trying RPC create_sos_event fallback:", error);
+        // Fallback to RPC if insert fails
+        const { data: rpcEventId, error: rpcError } = await supabase.rpc("create_sos_event", {
+          p_user_id: userId,
+          p_lat: location.lat,
+          p_lng: location.lng,
+          p_status: "active",
+        });
+        
+        if (rpcError) {
+          return NextResponse.json({ error: rpcError.message }, { status: 500 });
+        }
+        
+        return NextResponse.json(
+          {
+            message: "SOS event recorded via RPC.",
+            sosEventId: rpcEventId,
+            trackLink: `${siteUrl}/track/${rpcEventId}`,
+            sms,
+          },
+          { status: 201 }
+        );
       }
 
       return NextResponse.json(
@@ -66,6 +98,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Offline bypass mode
     return NextResponse.json(
       {
         message: "SOS triggered (offline bypass mode).",

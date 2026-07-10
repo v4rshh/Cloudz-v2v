@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { createServiceClient, isSupabaseConfigured } from "@/lib/supabase";
 
 function classifyIncidentText(text: string) {
   const lowercase = text.toLowerCase();
@@ -32,34 +32,43 @@ export async function POST(request: Request) {
   try {
     const { text, location, anonymous } = await request.json();
 
-    if (!text || !location) {
-      return NextResponse.json({ error: "text and location are required" }, { status: 400 });
+    if (!text || !location || typeof location.lat !== "number" || typeof location.lng !== "number") {
+      return NextResponse.json({ error: "text and location {lat, lng} are required" }, { status: 400 });
     }
 
     const classification = classifyIncidentText(text);
 
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from("incident_reports")
-        .insert({
-          raw_text: text,
-          category: classification.category,
-          severity: classification.severity,
-          confidence_score: classification.confidence_score,
-          // WKT format for PostGIS Geography POINT mapping
-          location: `POINT(${location.lng} ${location.lat})`,
-          status: "pending"
-        })
-        .select()
-        .single();
+      const supabase = createServiceClient();
+
+      const { data, error } = await supabase.rpc("create_incident_report", {
+        p_lat: location.lat,
+        p_lng: location.lng,
+        p_category: classification.category,
+        p_raw_text: text,
+        p_severity: classification.severity,
+        p_confidence_score: classification.confidence_score,
+        p_anonymous: !!anonymous,
+      });
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
+
       return NextResponse.json({
         message: "Report submitted to database.",
         classification,
-        report: data
+        report: {
+          id: data,
+          raw_text: text,
+          category: classification.category,
+          severity: classification.severity,
+          confidence_score: classification.confidence_score,
+          lat: location.lat,
+          lng: location.lng,
+          status: "pending",
+          created_at: new Date().toISOString(),
+        },
       }, { status: 201 });
     }
 
@@ -74,13 +83,17 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const includePending = searchParams.get("include_pending") === "true";
+
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from("incident_reports")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const supabase = createServiceClient();
+
+      const { data, error } = await (supabase as any).rpc("get_incident_reports", {
+        p_status: includePending ? null : "approved",
+      });
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -88,10 +101,9 @@ export async function GET() {
       return NextResponse.json({ reports: data });
     }
 
-    // Static mock list for local demo stability
     const mockReports = [
-      { id: "rep-1", raw_text: "Streetlights are completely broken on this block, very dark.", category: "infrastructure", severity: 2, location: { lat: 51.9215, lng: 4.4865 }, created_at: new Date().toISOString() },
-      { id: "rep-2", raw_text: "An individual was following me from Rotterdam Station.", category: "stalking", severity: 4, location: { lat: 51.9175, lng: 4.4840 }, created_at: new Date().toISOString() }
+      { id: "rep-1", raw_text: "Streetlights are completely broken on this block, very dark.", category: "infrastructure", severity: 2, confidence_score: 0.85, lat: 51.9215, lng: 4.4865, status: "approved", created_at: new Date().toISOString() },
+      { id: "rep-2", raw_text: "An individual was following me from Rotterdam Station.", category: "stalking", severity: 4, confidence_score: 0.85, lat: 51.9175, lng: 4.4840, status: "approved", created_at: new Date().toISOString() },
     ];
     return NextResponse.json({ reports: mockReports });
   } catch (err: any) {

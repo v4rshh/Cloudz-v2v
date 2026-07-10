@@ -74,13 +74,14 @@ graph TD
 
 ### 1. VibeRoute Safety Scoring & Tagging
 1.  **Request**: User enters an origin and destination.
-2.  **API Handler** (`/api/navigation/route`): Projects routing lines in `[lng, lat]` order and scores safety values based on incident report density and streetlight overlays.
-3.  **Vibe Tagging**: Clicking the Mapbox canvas adds a warning marker and prompts the user to select tag keywords, updating local risk caches.
+2.  **Routing**: The client requests directions from the Mapbox Directions API and gets `[lng, lat]` route coordinates.
+3.  **API Handler** (`/api/route-safety`): Scores route segments in `[lng, lat]` order against nearby `incident_reports` and `vibe_tags` rows stored as PostGIS geography points.
+4.  **Vibe Tagging**: Clicking the Mapbox canvas adds a tag marker and writes a `vibe_tags` row through the shared Supabase client.
 
 ### 2. Anonymous Incident Reporting
 1.  **Logging**: User submits a raw safety description text.
 2.  **NLP Classifier** (`/api/reports`): Runs a local regex tokenizer to classify category (assault, infrastructure, harassment) and severity (1–5).
-3.  **AI Verification Step**: Presents parsed parameters to the user for adjustment before writing to Supabase tables.
+3.  **Database Write**: Persists the approved incident into `incident_reports` through the Supabase RPC so the heatmap can consume moderated rows.
 
 ### 3. RAG Chat Assistant ("Sahara")
 1.  **Prompt**: User enters a query (e.g. *legal rights*).

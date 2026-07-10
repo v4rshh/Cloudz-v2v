@@ -1,21 +1,17 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import mapboxgl from "mapbox-gl";
-import { 
-  Navigation, 
-  MapPin, 
-  Eye, 
-  Lightbulb, 
-  Users, 
-  ShieldCheck, 
-  Sparkles,
-  AlertTriangle,
+import maplibregl from "maplibre-gl";
+import { DARK_MAP_STYLE } from "@/lib/mapbox";
+import {
+  Navigation,
+  Lightbulb,
+  Eye,
+  Users,
   Plus
 } from "lucide-react";
 
-// Rotterdam default coords
-const ROTTERDAM: [number, number] = [4.47917, 51.9225]; // [lng, lat] for Mapbox
+const ROTTERDAM: [number, number] = [4.47917, 51.9225];
 
 interface Route {
   id: string;
@@ -23,7 +19,7 @@ interface Route {
   safety_score: number;
   color: string;
   details: string;
-  path: number[][]; // [[lng, lat], ...]
+  path: number[][];
 }
 
 interface HeatmapZone {
@@ -43,8 +39,8 @@ interface VibeTag {
 
 export default function SafetyMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
   const [origin, setOrigin] = useState("Centrum, Rotterdam");
   const [destination, setDestination] = useState("Erasmus University Area, Rotterdam");
@@ -56,21 +52,15 @@ export default function SafetyMap() {
     { id: "v2", lat: 51.9190, lng: 4.4850, tag: "👥 Crowded area", created_at: new Date().toISOString() }
   ]);
 
-  // Map Filter Layers
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showWellLit, setShowWellLit] = useState(true);
   const [showFootTraffic, setShowFootTraffic] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // Vibe tag creation helper states
+
   const [showVibeForm, setShowVibeForm] = useState(false);
   const [clickedCoords, setClickedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [vibeText, setVibeText] = useState("⚠️ Unlit block");
 
-  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
-  const isMapboxReady = !!(mapboxToken && !mapboxToken.startsWith("your_"));
-
-  // Fetch routes and heatmap details
   useEffect(() => {
     fetchRoutesAndHeatmap();
   }, []);
@@ -91,7 +81,6 @@ export default function SafetyMap() {
       if (data.heatmap) setHeatmapZones(data.heatmap);
     } catch (err) {
       console.error("Error loading routing navigation endpoints:", err);
-      // Client-side local stubs fallback
       setRoutes([
         {
           id: "route_3",
@@ -144,27 +133,21 @@ export default function SafetyMap() {
     }
   };
 
-  // Initialize Mapbox map
   useEffect(() => {
-    if (!isMapboxReady || !mapContainerRef.current) return;
+    if (!mapContainerRef.current) return;
 
-    mapboxgl.accessToken = mapboxToken;
-
-    const map = new mapboxgl.Map({
+    const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: "mapbox://styles/mapbox/dark-v11",
+      style: DARK_MAP_STYLE,
       center: ROTTERDAM,
       zoom: 13.5,
-      pitch: 35,
-      antialias: true
+      pitch: 35
     });
 
     mapRef.current = map;
 
     map.on("load", () => {
-      // Add route layers
       drawRoutes(map);
-      // Add click handler to drop vibe tags
       map.on("click", (e) => {
         setClickedCoords({ lat: e.lngLat.lat, lng: e.lngLat.lng });
         setShowVibeForm(true);
@@ -174,9 +157,8 @@ export default function SafetyMap() {
     return () => {
       map.remove();
     };
-  }, [isMapboxReady, routes]);
+  }, [routes]);
 
-  // Redraw path geometries depending on selection state
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded() || routes.length === 0) return;
@@ -193,16 +175,13 @@ export default function SafetyMap() {
     });
   }, [selectedRouteId, routes]);
 
-  // Update map markers for safe zones and vibe tags
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    // Clear old markers
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
-    // Add safe zone markers
     const safeZones = [
       { name: "Centrum Police Station", lat: 51.9238, lng: 4.4851 },
       { name: "Erasmus Haven", lat: 51.9175, lng: 4.4805 }
@@ -210,7 +189,6 @@ export default function SafetyMap() {
 
     safeZones.forEach(z => {
       const el = document.createElement("div");
-      el.className = "custom-marker-police";
       el.style.backgroundColor = "#485fc7";
       el.style.width = "20px";
       el.style.height = "20px";
@@ -224,9 +202,9 @@ export default function SafetyMap() {
       el.style.fontSize = "10px";
       el.innerHTML = "P";
 
-      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`<h4>${z.name}</h4><p>24/7 Verified Safe Hub</p>`);
+      const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`<h4>${z.name}</h4><p>24/7 Verified Safe Hub</p>`);
 
-      const marker = new mapboxgl.Marker(el)
+      const marker = new maplibregl.Marker(el)
         .setLngLat([z.lng, z.lat])
         .setPopup(popup)
         .addTo(map);
@@ -234,26 +212,24 @@ export default function SafetyMap() {
       markersRef.current.push(marker);
     });
 
-    // Add vibe tags
     vibeTags.forEach(v => {
       const el = document.createElement("div");
       el.style.fontSize = "18px";
       el.style.cursor = "pointer";
       el.innerHTML = "📍";
 
-      const popup = new mapboxgl.Popup({ offset: 15 }).setHTML(`<strong>Vibe Tag</strong><p>${v.tag}</p>`);
+      const popup = new maplibregl.Popup({ offset: 15 }).setHTML(`<strong>Vibe Tag</strong><p>${v.tag}</p>`);
 
-      const marker = new mapboxgl.Marker(el)
+      const marker = new maplibregl.Marker(el)
         .setLngLat([v.lng, v.lat])
         .setPopup(popup)
         .addTo(map);
 
       markersRef.current.push(marker);
     });
-
   }, [vibeTags, routes]);
 
-  const drawRoutes = (map: mapboxgl.Map) => {
+  const drawRoutes = (map: maplibregl.Map) => {
     routes.forEach(r => {
       const geojson: any = {
         type: "Feature",
@@ -311,46 +287,8 @@ export default function SafetyMap() {
       </div>
 
       <div className="flex-1 relative overflow-hidden" style={{ height: "400px" }}>
-        {/* Mapbox Canvas Mount */}
-        {isMapboxReady ? (
-          <div ref={mapContainerRef} className="mapboxgl-map w-full h-full" />
-        ) : (
-          <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-8 text-center relative">
-            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#485fc7_1px,transparent_1px)] [background-size:16px_16px]" />
-            <AlertTriangle className="text-amber-400 size-12 mb-4 animate-bounce" />
-            <h4 className="font-bold text-white mb-2">Premium Mapbox Overlay Standby</h4>
-            <p className="text-sm text-slate-400 max-w-sm mb-4">
-              Add a valid <code>NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN</code> inside your <code>.env</code> key configurations to unlock dark overlays and heatmaps.
-            </p>
-            {/* Interactive Vector Mock Overlay Map */}
-            <div className="w-full max-w-md h-48 border border-white/5 bg-white/2 backdrop-blur-md rounded-xl p-4 flex flex-col justify-between text-left">
-              <div>
-                <span className="text-xs font-semibold text-teal-400 tracking-wider uppercase">Rotterdam Local Mode</span>
-                <p className="text-xs text-slate-300 mt-2">📍 Origin: {origin}</p>
-                <p className="text-xs text-slate-300">🏁 Destination: {destination}</p>
-              </div>
-              <div className="flex justify-between items-center mt-4">
-                <span className="text-[10px] bg-slate-800 text-teal-400 px-2 py-1 rounded">Offline Bypass Routing Active</span>
-                <button 
-                  onClick={() => {
-                    setVibeTags([...vibeTags, {
-                      id: crypto.randomUUID(),
-                      lat: 51.921,
-                      lng: 4.481,
-                      tag: "⚠️ Mock Vibe dropped on block",
-                      created_at: new Date().toISOString()
-                    }]);
-                  }}
-                  className="btn btn-secondary text-[11px] py-1 px-3"
-                >
-                  <Plus size={12} /> Drop Tag
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <div ref={mapContainerRef} className="w-full h-full" />
 
-        {/* Map Filters Overlay Control */}
         <div className="map-control-panel glass absolute top-4 right-4 z-10 p-4 w-60 bg-slate-900/80 backdrop-blur-md">
           <h4 className="text-xs text-slate-400 font-bold mb-3 tracking-wider uppercase">Overlay Layers</h4>
           <div className="flex flex-col gap-3">
@@ -378,12 +316,11 @@ export default function SafetyMap() {
           </div>
         </div>
 
-        {/* Vibe Tag Floating drop form */}
         {showVibeForm && clickedCoords && (
           <div className="absolute bottom-4 left-4 z-10 glass p-4 w-64 bg-slate-950/90 backdrop-blur-md border-teal-500/30">
             <h4 className="text-xs font-bold text-teal-400 mb-2">Drop Vibe Tag Here?</h4>
-            <select 
-              value={vibeText} 
+            <select
+              value={vibeText}
               onChange={(e) => setVibeText(e.target.value)}
               className="w-full text-xs bg-slate-900 border border-white/10 rounded p-2 mb-3 text-white"
             >
@@ -400,15 +337,14 @@ export default function SafetyMap() {
         )}
       </div>
 
-      {/* Routes list description panels */}
       <div className="p-6 bg-slate-900/40 border-t border-white/5">
         <h4 className="text-xs text-slate-400 font-bold mb-3 uppercase tracking-wider">Candidate Routes</h4>
         <div className="flex flex-col gap-3">
           {routes.map((r) => {
             const isSelected = r.id === selectedRouteId;
             return (
-              <div 
-                key={r.id} 
+              <div
+                key={r.id}
                 onClick={() => setSelectedRouteId(r.id)}
                 className={`route-list-item ${isSelected ? "selected" : ""}`}
               >

@@ -8,7 +8,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "origin and destination are required" }, { status: 400 });
     }
 
-    // Safety-scored route paths in Rotterdam [lng, lat] for Mapbox
+    // Legacy dashboard preview route.
+    // Canonical Member B scoring now lives in /api/route-safety.
     const routes = [
       {
         id: "route_3",

@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   XCircle
 } from "lucide-react";
-import supabase from "../lib/supabase";
 
 interface EmergencyContact {
   name: string;
@@ -170,6 +169,7 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
     setCountdown(5);
   };
 
+  // Triggers API and starts broadcasting coordinates via the PATCH route
   const triggerSOSEngine = async () => {
     setActiveSosState("active");
     startCamera();
@@ -188,17 +188,20 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
           emergencyContacts: localContacts,
         }),
       });
-      const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "SOS API request failed");
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error ?? "Failed to create SOS event");
       }
 
-      const eventId = data.sosEventId || "mock-sos-event-uuid";
+      const data = await res.json();
+      const eventId = data.sosEventId || data.id || "mock-sos-event-uuid";
       setSosEventId(eventId);
       setTrackLink(data.trackLink || `${window.location.origin}/track/${eventId}`);
       setSmsResults(data.sms?.results || []);
       setSmsStatus(data.sms?.message || null);
+      
+      // Start broadcasting coordinate updates through the tested PATCH route
       startBroadcastingCoordinates(eventId, coords);
     } catch (err) {
       console.error("SOS trigger fail", err);
@@ -216,21 +219,25 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
     
     followIntervalRef.current = setInterval(async () => {
       // Simulate slow movement coordinates updates
-      current.lat += (Math.random() - 0.5) * 0.0005;
-      current.lng += (Math.random() - 0.5) * 0.0005;
+      current = {
+        lat: current.lat + (Math.random() - 0.5) * 0.0005,
+        lng: current.lng + (Math.random() - 0.5) * 0.0005,
+      };
       setCurrentCoords(current);
 
       try {
-        // Save trail coordinates to Supabase table row
-        await supabase
-          .from("sos_events")
-          .update({
-            current_location: current,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", eventId);
+        const res = await fetch(`/api/sos/${eventId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: current.lat, lng: current.lng }),
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error ?? "Failed to update location");
+        }
       } catch (err) {
-        console.log("Mock broadast updates:", current);
+        console.warn("Location broadcast update failed:", err);
       }
     }, 4000);
   };
