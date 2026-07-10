@@ -19,8 +19,8 @@ export default function SosPage() {
   useEffect(() => {
     createClient()
       .auth.getSession()
-      .then(({ data }) => {
-        setUserId(data.session?.user.id ?? null);
+      .then((res: any) => {
+        setUserId(res.data?.session?.user?.id ?? null);
       });
   }, []);
 

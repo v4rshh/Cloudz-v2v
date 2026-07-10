@@ -2,25 +2,59 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Radio, 
   AlertOctagon, 
   Video, 
-  Check, 
   AlertTriangle, 
   Map, 
   HelpCircle,
-  Volume2
+  Volume2,
+  Link2,
+  MessageSquare,
+  CheckCircle2,
+  XCircle
 } from "lucide-react";
+
+interface EmergencyContact {
+  name: string;
+  phone: string;
+}
+
+interface SmsResult {
+  name: string;
+  phone: string;
+  status: "sent" | "failed" | "skipped";
+  error?: string;
+}
 
 interface EmergencySOSProps {
   activeSosState: "idle" | "counting" | "active";
   setActiveSosState: (state: "idle" | "counting" | "active") => void;
-  trustedContacts?: { name: string; phone: string }[];
+  trustedContacts?: EmergencyContact[];
+}
+
+const DEFAULT_COORDS = { lat: 51.9225, lng: 4.47917 };
+
+function getCurrentCoords(): Promise<{ lat: number; lng: number }> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(DEFAULT_COORDS);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(DEFAULT_COORDS),
+      { timeout: 5000, enableHighAccuracy: true }
+    );
+  });
 }
 
 export default function EmergencySOS({ activeSosState, setActiveSosState, trustedContacts = [] }: EmergencySOSProps) {
   const [countdown, setCountdown] = useState(5);
   const [sosEventId, setSosEventId] = useState<string | null>(null);
+  const [trackLink, setTrackLink] = useState<string | null>(null);
+  const [smsResults, setSmsResults] = useState<SmsResult[]>([]);
+  const [smsStatus, setSmsStatus] = useState<string | null>(null);
+  const [localContacts, setLocalContacts] = useState<EmergencyContact[]>(trustedContacts);
   
   // Follow Me Tracking
   const [isFollowing, setIsFollowing] = useState(false);
@@ -64,6 +98,17 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
       console.warn("Audio Context sound blocked by browser autoplay rules");
     }
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("trusted_contacts");
+    if (saved) {
+      const parsed = JSON.parse(saved) as { name: string; phone: string }[];
+      setLocalContacts(parsed.map((c) => ({ name: c.name, phone: c.phone })));
+    } else if (trustedContacts.length > 0) {
+      setLocalContacts(trustedContacts);
+    }
+  }, [trustedContacts]);
 
   useEffect(() => {
     if (activeSosState === "active" && !stream) {
@@ -110,7 +155,9 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
       setCountdown((prev) => {
         if (prev <= 1) {
           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          triggerSOSEngine();
+          setTimeout(() => {
+            triggerSOSEngine();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -128,29 +175,20 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
   const triggerSOSEngine = async () => {
     setActiveSosState("active");
     startCamera();
-    
-    // Pick current GPS coordinates
-    const coords = { lat: 51.9225, lng: 4.47917 };
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          coords.lat = pos.coords.latitude;
-          coords.lng = pos.coords.longitude;
-          setCurrentCoords(coords);
-        },
-        () => console.log("Using default Rotterdam coords")
-      );
-    }
+
+    const coords = await getCurrentCoords();
+    setCurrentCoords(coords);
 
     try {
       const res = await fetch("/api/sos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          lat: coords.lat,
-          lng: coords.lng,
-          userId: "demo-web-user"
-        })
+          userId: "demo-web-user",
+          triggerType: "button",
+          location: coords,
+          emergencyContacts: localContacts,
+        }),
       });
 
       if (!res.ok) {
@@ -159,13 +197,21 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
       }
 
       const data = await res.json();
-      const eventId = data.id as string;
+      const eventId = data.sosEventId || data.id || "mock-sos-event-uuid";
       setSosEventId(eventId);
+      setTrackLink(data.trackLink || `${window.location.origin}/track/${eventId}`);
+      setSmsResults(data.sms?.results || []);
+      setSmsStatus(data.sms?.message || null);
       
       // Start broadcasting coordinate updates through the tested PATCH route
       startBroadcastingCoordinates(eventId, coords);
     } catch (err) {
       console.error("SOS trigger fail", err);
+      const mockId = crypto.randomUUID();
+      setSosEventId(mockId);
+      setTrackLink(`${window.location.origin}/track/${mockId}`);
+      setSmsStatus("SOS activated locally. SMS could not be dispatched — check server logs.");
+      startBroadcastingCoordinates(mockId, coords);
     }
   };
 
@@ -209,12 +255,15 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
         await fetch("/api/sos/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: sosEventId, status: "resolved" })
+          body: JSON.stringify({ id: sosEventId, status: "resolved" }),
         });
       } catch (err) {
         console.warn("SOS resolve error", err);
       }
       setSosEventId(null);
+      setTrackLink(null);
+      setSmsResults([]);
+      setSmsStatus(null);
     }
     alert("Emergency SOS has been resolved and deactivated.");
   };
@@ -278,8 +327,10 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
       setCheckInCountdown((prev) => {
         if (prev <= 1) {
           if (checkInIntervalRef.current) clearInterval(checkInIntervalRef.current);
-          setAnomalyCheckIn(false);
-          triggerSOSEngine();
+          setTimeout(() => {
+            setAnomalyCheckIn(false);
+            triggerSOSEngine();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -365,6 +416,57 @@ export default function EmergencySOS({ activeSosState, setActiveSosState, truste
                   <span>Cloud Backup Active</span>
                 </div>
               </div>
+
+              {trackLink && (
+                <div className="w-full border border-teal-500/20 bg-teal-950/10 rounded-xl p-4 text-left">
+                  <div className="flex items-center gap-2 text-teal-400 font-bold text-xs mb-2">
+                    <Link2 size={14} />
+                    <span>Live Tracking Link (sent via SMS)</span>
+                  </div>
+                  <a
+                    href={trackLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-slate-300 font-mono break-all hover:text-teal-400 transition"
+                  >
+                    {trackLink}
+                  </a>
+                </div>
+              )}
+
+              {(smsStatus || smsResults.length > 0) && (
+                <div className="w-full border border-white/5 bg-black/20 rounded-xl p-4 text-left">
+                  <div className="flex items-center gap-2 text-slate-300 font-bold text-xs mb-2">
+                    <MessageSquare size={14} className="text-teal-400" />
+                    <span>SMS Dispatch Status</span>
+                  </div>
+                  {smsStatus && (
+                    <p className="text-[11px] text-slate-400 mb-3">{smsStatus}</p>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    {smsResults.map((result, i) => (
+                      <div key={i} className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-300 truncate max-w-[60%]">{result.name}</span>
+                        <span className="flex items-center gap-1">
+                          {result.status === "sent" ? (
+                            <>
+                              <CheckCircle2 size={12} className="text-emerald-400" />
+                              <span className="text-emerald-400">Sent</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle size={12} className="text-rose-400" />
+                              <span className="text-rose-400" title={result.error}>
+                                {result.status === "skipped" ? "Skipped" : "Failed"}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 w-full mt-2">
                 <button onClick={resolveSOS} className="btn btn-secondary flex-1">

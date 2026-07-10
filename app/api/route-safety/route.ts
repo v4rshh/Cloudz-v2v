@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     const supabase = createServiceClient();
     const [{ data: incidents, error: incidentsError }, { data: vibeTags, error: vibeTagsError }] = await Promise.all([
-      supabase.rpc("get_incident_reports", { p_status: "approved" }),
+      (supabase as any).rpc("get_incident_reports", { p_status: "approved" }),
       supabase.rpc("get_vibe_tags"),
     ]);
 

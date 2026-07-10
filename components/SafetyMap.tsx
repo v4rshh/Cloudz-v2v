@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { getMapboxAccessToken, MAPBOX_DARK_STYLE } from "@/lib/mapbox";
+import { getMapboxAccessToken, MAPBOX_DARK_STYLE, geocodePlace } from "@/lib/mapbox";
 import { fetchVibeTags, submitVibeTag, VIBE_TAG_OPTIONS, type VibeTag } from "@/lib/vibe-tags";
 import {
   Navigation,
@@ -41,6 +41,8 @@ export default function SafetyMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const startMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const endMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
@@ -59,19 +61,63 @@ export default function SafetyMap() {
   const [savingVibeTag, setSavingVibeTag] = useState(false);
   const [vibeTagError, setVibeTagError] = useState<string | null>(null);
 
+  // Start & End States
+  const [startCoords, setStartCoords] = useState<{ lat: number; lng: number }>(ORIGIN);
+  const [endCoords, setEndCoords] = useState<{ lat: number; lng: number }>(DESTINATION);
+  const [originText, setOriginText] = useState("Rotterdam Centraal");
+  const [destinationText, setDestinationText] = useState("Erasmus University Rotterdam");
+  const [clickMode, setClickMode] = useState<"off" | "start" | "end">("off");
+
+  const clickModeRef = useRef(clickMode);
+  useEffect(() => {
+    clickModeRef.current = clickMode;
+  }, [clickMode]);
+
   const loadVibeTags = useCallback(async () => {
     const tags = await fetchVibeTags();
     setVibeTags(tags);
   }, []);
 
-  const fetchRoutesAndHeatmap = useCallback(async () => {
+  const placeOrMoveMarker = useCallback(
+    (kind: "start" | "end", coords: { lat: number; lng: number }, label: string, color: string) => {
+      const map = mapRef.current;
+      if (!map) return;
+      const ref = kind === "start" ? startMarkerRef : endMarkerRef;
+      ref.current?.remove();
+      
+      const el = document.createElement("div");
+      el.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="
+            width:14px;height:14px;border-radius:9999px;
+            background:${color};border:2px solid white;
+            box-shadow:0 0 12px ${color}88;
+          "></div>
+          <span style="
+            font-size:10px;font-weight:600;letter-spacing:0.04em;
+            text-transform:uppercase;color:#e2e8f0;
+            background:rgba(15,20,31,0.85);
+            border:1px solid rgba(255,255,255,0.1);
+            border-radius:6px;padding:2px 6px;
+          ">${label}</span>
+        </div>
+      `;
+      
+      ref.current = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+        .setLngLat([coords.lng, coords.lat])
+        .addTo(map);
+    },
+    []
+  );
+
+  const fetchRoutesAndHeatmap = useCallback(async (start = startCoords, end = endCoords) => {
     setLoading(true);
     setLoadError(null);
     try {
       const res = await fetch("/api/navigation/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin: ORIGIN, destination: DESTINATION })
+        body: JSON.stringify({ origin: start, destination: end })
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -88,7 +134,40 @@ export default function SafetyMap() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [startCoords, endCoords]);
+
+  const handleRouteSearch = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      let start = startCoords;
+      let end = endCoords;
+
+      if (originText && !originText.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)) {
+        const geocodedStart = await geocodePlace(originText);
+        if (geocodedStart) {
+          start = { lat: geocodedStart[1], lng: geocodedStart[0] };
+          setStartCoords(start);
+          placeOrMoveMarker("start", start, "Start", "#2dd4bf");
+        }
+      }
+
+      if (destinationText && !destinationText.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/)) {
+        const geocodedEnd = await geocodePlace(destinationText);
+        if (geocodedEnd) {
+          end = { lat: geocodedEnd[1], lng: geocodedEnd[0] };
+          setEndCoords(end);
+          placeOrMoveMarker("end", end, "End", "#fb7185");
+        }
+      }
+
+      await fetchRoutesAndHeatmap(start, end);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Routing search failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchRoutesAndHeatmap();
@@ -104,6 +183,7 @@ export default function SafetyMap() {
       center: ROTTERDAM,
       zoom: 13.5,
       pitch: 35,
+      bearing: -12,
     });
 
     mapRef.current = map;
@@ -122,18 +202,39 @@ export default function SafetyMap() {
         }
       });
 
+      placeOrMoveMarker("start", ORIGIN, "Start", "#2dd4bf");
+      placeOrMoveMarker("end", DESTINATION, "End", "#fb7185");
+
       map.on("click", (e) => {
-        setClickedCoords({ lat: e.lngLat.lat, lng: e.lngLat.lng });
-        setVibeTagError(null);
-        setShowVibeForm(true);
+        const lat = e.lngLat.lat;
+        const lng = e.lngLat.lng;
+        
+        if (clickModeRef.current === "start") {
+          setStartCoords({ lat, lng });
+          setOriginText(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          placeOrMoveMarker("start", { lat, lng }, "Start", "#2dd4bf");
+          setClickMode("off");
+        } else if (clickModeRef.current === "end") {
+          setEndCoords({ lat, lng });
+          setDestinationText(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          placeOrMoveMarker("end", { lat, lng }, "End", "#fb7185");
+          setClickMode("off");
+        } else {
+          setClickedCoords({ lat, lng });
+          setVibeTagError(null);
+          setShowVibeForm(true);
+        }
       });
     });
 
     return () => {
+      startMarkerRef.current?.remove();
+      endMarkerRef.current?.remove();
+      markersRef.current.forEach((m) => m.remove());
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [placeOrMoveMarker]);
 
   // Draw / refresh route lines whenever routes load.
   useEffect(() => {
@@ -231,7 +332,11 @@ export default function SafetyMap() {
       el.innerHTML = "📍";
 
       const popup = new mapboxgl.Popup({ offset: 15 }).setHTML(
-        `<strong>Vibe Tag</strong><p>${v.tag}</p><p style="font-size:10px;opacity:0.6;">${new Date(v.created_at).toLocaleString()}</p>`
+        `<div style="color: #0f172a; font-family: sans-serif; min-width: 140px; padding: 4px;">
+          <strong style="color: #14b8a6; font-size: 12px; font-weight: 700; display: block; margin-bottom: 2px;">Vibe Tag</strong>
+          <p style="margin: 4px 0 0; font-size: 12px; color: #334155; font-weight: 500;">${v.tag}</p>
+          <p style="margin: 6px 0 0; font-size: 10px; color: #64748b;">${new Date(v.created_at).toLocaleString()}</p>
+        </div>`
       );
 
       const marker = new mapboxgl.Marker(el)
@@ -337,7 +442,68 @@ export default function SafetyMap() {
         )}
       </div>
 
-      <div className="p-6 bg-slate-900/40 border-t border-white/5">
+      <div className="p-6 bg-slate-900/40 border-t border-white/5 flex flex-col gap-4">
+        {/* Route Setting Controls */}
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Start Location</label>
+              <input
+                value={originText}
+                onChange={(e) => setOriginText(e.target.value)}
+                placeholder="Start Coordinates or Place Name"
+                className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-teal-500/50"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">End Location</label>
+              <input
+                value={destinationText}
+                onChange={(e) => setDestinationText(e.target.value)}
+                placeholder="End Coordinates or Place Name"
+                className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-teal-500/50"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setClickMode(clickMode === "start" ? "off" : "start")}
+              className={`flex items-center justify-center rounded-xl py-2.5 px-3 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-md ${
+                clickMode === "start" 
+                  ? "bg-teal-500 text-slate-950 font-bold shadow-[0_0_12px_rgba(45,212,191,0.25)]" 
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white"
+              }`}
+            >
+              <span>{clickMode === "start" ? "Tap Map to Select..." : "Set start on map"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setClickMode(clickMode === "end" ? "off" : "end")}
+              className={`flex items-center justify-center rounded-xl py-2.5 px-3 text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer shadow-md ${
+                clickMode === "end" 
+                  ? "bg-rose-500 text-white font-bold shadow-[0_0_12px_rgba(251,113,133,0.25)]" 
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white"
+              }`}
+            >
+              <span>{clickMode === "end" ? "Tap Map to Select..." : "Set end on map"}</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRouteSearch}
+            disabled={loading}
+            className="w-full flex items-center justify-center rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-3 px-4 text-xs font-bold tracking-wider transition-all duration-300 cursor-pointer hover:from-teal-400 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_4px_12px_rgba(20,184,166,0.25)] hover:shadow-[0_6px_20px_rgba(20,184,166,0.4)]"
+          >
+            <span>{loading ? "Finding Safest Route..." : "Get Route"}</span>
+          </button>
+        </div>
+
+        <div className="border-t border-white/5 my-2"></div>
+
         <h4 className="text-xs text-slate-400 font-bold mb-3 uppercase tracking-wider">Candidate Routes</h4>
         {loadError && <p className="text-xs text-rose-400 mb-3">{loadError}</p>}
         <div className="flex flex-col gap-3">

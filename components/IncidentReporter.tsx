@@ -70,6 +70,9 @@ export default function IncidentReporter() {
   // Local Feed State
   const [feed, setFeed] = useState<Report[]>(INITIAL_FEED);
 
+  // Verification user votes state tracker
+  const [userVotes, setUserVotes] = useState<Record<string, "up" | "down">>({});
+
   const handleAnalyze = async () => {
     if (!text.trim()) return;
     setSubmitting(true);
@@ -134,10 +137,44 @@ export default function IncidentReporter() {
   };
 
   const handleVote = async (reportId: string, voteType: "up" | "down") => {
+    const existingVote = userVotes[reportId];
+    let delta = 0;
+    
+    if (voteType === "up") {
+      if (existingVote === "up") {
+        delta = -1;
+        setUserVotes((prev) => {
+          const next = { ...prev };
+          delete next[reportId];
+          return next;
+        });
+      } else if (existingVote === "down") {
+        delta = 2;
+        setUserVotes((prev) => ({ ...prev, [reportId]: "up" }));
+      } else {
+        delta = 1;
+        setUserVotes((prev) => ({ ...prev, [reportId]: "up" }));
+      }
+    } else {
+      if (existingVote === "down") {
+        delta = 1;
+        setUserVotes((prev) => {
+          const next = { ...prev };
+          delete next[reportId];
+          return next;
+        });
+      } else if (existingVote === "up") {
+        delta = -2;
+        setUserVotes((prev) => ({ ...prev, [reportId]: "down" }));
+      } else {
+        delta = -1;
+        setUserVotes((prev) => ({ ...prev, [reportId]: "down" }));
+      }
+    }
+
     setFeed((prev) =>
       prev.map((rep) => {
         if (rep.id === reportId) {
-          const delta = voteType === "up" ? 1 : -1;
           return { ...rep, verification_count: rep.verification_count + delta };
         }
         return rep;
@@ -301,24 +338,50 @@ export default function IncidentReporter() {
                 <p className="text-xs text-slate-200 leading-relaxed font-sans">{rep.raw_text}</p>
 
                 <div className="flex justify-between items-center border-t border-white/5 pt-3 mt-1">
-                  <span className="text-[10px] text-slate-500">
-                    Verification Score: <strong className="text-slate-300">{rep.verification_count}</strong>
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500">
+                      Verification Score: <strong className="text-slate-300 font-semibold">{rep.verification_count}</strong>
+                    </span>
+                    {userVotes[rep.id] === "up" && (
+                      <span className="text-[9px] bg-teal-500/10 text-teal-400 px-1.5 py-0.5 rounded font-mono font-medium">
+                        +1 Verified
+                      </span>
+                    )}
+                    {userVotes[rep.id] === "down" && (
+                      <span className="text-[9px] bg-rose-500/10 text-rose-400 px-1.5 py-0.5 rounded font-mono font-medium">
+                        -1 Disputed
+                      </span>
+                    )}
+                  </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2.5">
                     <button 
                       onClick={() => handleVote(rep.id, "up")}
-                      className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-teal-400 transition"
+                      className={`flex items-center gap-1.5 text-[10px] rounded-lg px-2.5 py-1.5 transition-all duration-300 cursor-pointer border ${
+                        userVotes[rep.id] === "up"
+                          ? "bg-teal-500/10 border-teal-500/30 text-teal-400 font-semibold shadow-[0_0_8px_rgba(45,212,191,0.15)]"
+                          : userVotes[rep.id] === "down"
+                            ? "border-slate-800 text-slate-600 opacity-40 cursor-not-allowed"
+                            : "border-white/10 hover:border-teal-500/30 hover:bg-teal-500/5 text-slate-400 hover:text-teal-400"
+                      }`}
+                      disabled={userVotes[rep.id] === "down"}
                     >
-                      <ThumbsUp size={12} />
-                      <span>Verify</span>
+                      <ThumbsUp size={11} className={userVotes[rep.id] === "up" ? "scale-110 animate-bounce" : ""} />
+                      <span>{userVotes[rep.id] === "up" ? "Verified" : "Verify"}</span>
                     </button>
                     <button 
                       onClick={() => handleVote(rep.id, "down")}
-                      className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-rose-500 transition"
+                      className={`flex items-center gap-1.5 text-[10px] rounded-lg px-2.5 py-1.5 transition-all duration-300 cursor-pointer border ${
+                        userVotes[rep.id] === "down"
+                          ? "bg-rose-500/10 border-rose-500/30 text-rose-400 font-semibold shadow-[0_0_8px_rgba(244,63,94,0.15)]"
+                          : userVotes[rep.id] === "up"
+                            ? "border-slate-800 text-slate-600 opacity-40 cursor-not-allowed"
+                            : "border-white/10 hover:border-rose-500/30 hover:bg-rose-500/5 text-slate-400 hover:text-rose-400"
+                      }`}
+                      disabled={userVotes[rep.id] === "up"}
                     >
-                      <ThumbsDown size={12} />
-                      <span>Dispute</span>
+                      <ThumbsDown size={11} className={userVotes[rep.id] === "down" ? "scale-110 animate-bounce" : ""} />
+                      <span>{userVotes[rep.id] === "down" ? "Disputed" : "Dispute"}</span>
                     </button>
                   </div>
                 </div>

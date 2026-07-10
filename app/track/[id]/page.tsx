@@ -66,49 +66,54 @@ export default function TrackPage() {
   }, [id]);
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-md flex-col gap-6 p-6">
+    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 p-6 text-slate-200">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-900">Live SOS Tracking</h1>
-        <p className="mt-2 text-sm text-zinc-600">
+        <h1 className="text-2xl font-bold text-white tracking-tight">Live SOS Tracking</h1>
+        <p className="mt-2 text-sm text-slate-400">
           Unauthenticated view — updates via Supabase Realtime.
         </p>
       </div>
 
       {error && (
-        <p className="rounded bg-red-100 px-3 py-2 text-sm text-red-800">{error}</p>
+        <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-sm text-rose-400">{error}</p>
       )}
 
       {!event && !error && (
-        <p className="text-sm text-zinc-500">Loading SOS event…</p>
+        <p className="text-sm text-slate-500 animate-pulse">Loading SOS event…</p>
       )}
 
       {event && (
-        <div className="rounded border border-zinc-200 bg-zinc-50 p-4 font-mono text-sm">
+        <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-5 font-mono text-sm text-slate-300 backdrop-blur-md">
           <p>
-            <span className="font-sans font-medium">Event ID:</span> {event.id}
+            <span className="font-sans font-semibold text-slate-400">Event ID:</span>{" "}
+            <span className="text-white select-all">{event.id}</span>
+          </p>
+          <p className="mt-3">
+            <span className="font-sans font-semibold text-slate-400">Latitude:</span>{" "}
+            <span className="text-teal-400">{event.lat}</span>
           </p>
           <p className="mt-2">
-            <span className="font-sans font-medium">Latitude:</span> {event.lat}
+            <span className="font-sans font-semibold text-slate-400">Longitude:</span>{" "}
+            <span className="text-teal-400">{event.lng}</span>
           </p>
-          <p className="mt-1">
-            <span className="font-sans font-medium">Longitude:</span> {event.lng}
+          <p className="mt-3">
+            <span className="font-sans font-semibold text-slate-400">Status:</span>{" "}
+            <span className="badge badge-danger text-xs px-2 py-0.5 uppercase">{event.status}</span>
           </p>
-          <p className="mt-2">
-            <span className="font-sans font-medium">Status:</span> {event.status}
-          </p>
-          <p className="mt-2">
-            <span className="font-sans font-medium">Last updated:</span>{" "}
-            {new Date(event.updated_at).toLocaleString()}
+          <p className="mt-3">
+            <span className="font-sans font-semibold text-slate-400">Last updated:</span>{" "}
+            <span className="text-slate-400">{new Date(event.updated_at).toLocaleString()}</span>
           </p>
           {live && (
-            <p className="mt-3 font-sans text-xs text-green-700">
-              ● Live — received Realtime update
+            <p className="mt-4 font-sans text-xs text-teal-400 flex items-center gap-1.5 animate-pulse">
+              <span className="size-2 bg-teal-500 rounded-full" />
+              <span>Live updates active</span>
             </p>
           )}
         </div>
       )}
 
-      <Link href="/" className="text-sm text-zinc-500 underline">
+      <Link href="/" className="text-sm text-teal-400 hover:text-teal-300 underline transition mt-2">
         Back home
       </Link>
     </div>

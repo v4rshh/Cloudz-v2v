@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase";
+import { createServiceClient, isSupabaseConfigured } from "@/lib/supabase";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -7,8 +7,21 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const supabase = createServiceClient();
 
+  if (!isSupabaseConfigured) {
+    // Return mock SOS event for offline demo mode
+    return NextResponse.json({
+      id: id || "mock-sos-event-uuid",
+      user_id: "demo-web-user",
+      lat: 51.9225,
+      lng: 4.47917,
+      status: "active",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  const supabase = createServiceClient();
   const { data, error } = await supabase.rpc("get_sos_event", { p_id: id });
 
   if (error) {
@@ -46,6 +59,19 @@ export async function PATCH(request: Request, context: RouteContext) {
       { error: "lat and lng must be numbers" },
       { status: 400 }
     );
+  }
+
+  if (!isSupabaseConfigured) {
+    // Return mock coordinate update for offline demo mode
+    return NextResponse.json({
+      id,
+      user_id: "demo-web-user",
+      lat,
+      lng,
+      status: "active",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
   }
 
   const supabase = createServiceClient();

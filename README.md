@@ -1,180 +1,272 @@
-#SafeSphere — Premium Safety Navigation & Emergency Response Web Application
+# SafeSphere — Premium Safety Navigation & Emergency Response PWA
 
-SafeSphere is an intelligent, AI-powered women's safety platform combining safe navigation, a RAG-powered safety assistant ("Sahara"), smart incident reporting, and emergency SOS response. Both the web client and backend API are fully built in **TypeScript** for robust compile-time safety.
+SafeSphere is an AI-powered women's safety platform combining safety-scored navigation (**VibeRoute**), anonymous incident reporting, a RAG-powered safety assistant ("Sahara"), emergency SOS with live tracking, and discreet de-escalation tools (**GhostCall**). The entire product ships as a single **Next.js 16 (App Router)** Progressive Web Application backed by **Supabase** (Postgres + Realtime) and deployable to Vercel with zero multi-service orchestration.
 
----
-
-## 🌟 Features Implemented in the Web Dashboard
-
-### 1. Interactive Safety Map
-*   **Aesthetics**: Styled with a premium dark map overlay using **Leaflet** (`react-leaflet`).
-*   **Routing**: Renders safety-scored routes (Safest, Well-Lit, Fastest) in distinct colors.
-*   **Toggles**: Features dynamic checkbox overlays for crowdsourced risk heatmaps, streetlights, and traffic layers.
-
-### 2. Sahara AI Safety Assistant
-*   **Interface**: Grounded glassmorphic chat layout with automatic scrollbars.
-*   **Citations**: Returns safety answers and displays verified legal source citations.
-*   **Crisis Interception**: Real-time crisis keyword scanner: typing expressions like *"someone is following me"* automatically redirects the interface to the SOS Hub.
-
-### 3. Smart Incident Reporting
-*   **Tagging**: Automatically tags incident category and severity via backend NLP classifier services.
-*   **Review Flow**: Displays an AI review step letting users confirm or adjust tags before submission.
-*   **Credibility**: Includes a community feed where other users upvote or downvote reports to verify credibility.
-
-### 4. Emergency SOS Hub
-*   **Panic Button**: Giant pulsating SOS button with a cancellable 5-second countdown.
-*   **Alarm**: Synthesizes a real police siren audio alarm using the browser's native HTML5 **AudioContext** API.
-*   **Evidence Recording**: Requests webcam access to display a live feed and simulate secure cloud evidence recording.
-*   **Follow Me**: Live tracking simulation with automatic path-deviation alarms and soft check-in verification triggers.
+For system diagrams and data-flow detail, see [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
-## 📋 Functional Requirements & Scope
+## Team Ownership
 
-Requirements are prioritized to ensure rapid scope decisions during hackathon build phases:
+### VibeRoute — Maps & Safety Score
 
-### 🔴 MUST (Core Demo Path)
-*   **FR1 — VibeRoute: Safety-Scored Navigation**:
-    *   User enters start & destination; app returns both fastest and "safest" routes.
-    *   Each route segment is color-coded by computed safety score.
-    *   Safety score is a weighted function of incident density, time-of-day, and proximity to "safe nodes" (police, hospitals, 24h businesses).
-    *   Users can drop "vibe tags" on blocks (e.g. "unlit alley", "crowded area") to immediately update the scoring model.
-*   **FR2 — Anonymous Incident Reporting & Live Heatmap**:
-    *   One-tap report (type, auto-location, optional note) with zero account details required.
-    *   Reports render on a live heatmap in near-real-time and feed the FR1 navigation scoring engine.
-*   **FR3 — One-Tap GhostCall**:
-    *   A single control launches a full-screen simulated native incoming call screen.
-    *   Realistic ringtone plays; answering plays a pre-generated voice clip of a real person speaking.
-    *   No confirmation step (triggerable in under 2 taps from anywhere).
-*   **FR4 — ShadowStream: SOS & Live Tracking**:
-    *   One-tap SOS immediately broadcasts GPS location updates.
-    *   Sends SMS automatically to trusted contacts with a secure, unindexed tracking web link.
-    *   The link opens a live map showing position updates in real-time with no login or app install required for the contact.
-*   **FR5 — Trusted Contacts Management**:
-    *   Add, edit, and remove trusted contacts (name + phone number) ahead of time.
+Owns everything map-visual and routing intelligence.
 
-### 🟡 STRETCH (Built if core path completes early)
-*   **FR6 — AuraSense Companion Mode**:
-    *   Stealth display (looks powered-off to onlookers) that keeps screen alive via browser Wake Lock API.
-    *   Periodic "Are you OK?" prompts, escalating automatically to FR4 (SOS) if ignored.
-*   **FR7 — Follow Me / Deviation Alerts**:
-    *   Share live walk with a friend, auto-alerting on unexpected stops or path deviations.
+| Area | Implementation |
+|---|---|
+| **Mapbox GL JS** | Dark `mapbox://styles/mapbox/dark-v11` canvas in `components/SafetyMap.tsx` and `app/track/[id]/page.tsx`; SSR-disabled dynamic import on the dashboard |
+| **Directions API** | Route geometry served by `POST /api/navigation/route`; designed for Mapbox Directions integration with safety re-ranking on top |
+| **Dual-route rendering** | Fastest vs. safest (plus Well-Lit) routes drawn as color-coded GeoJSON line layers with selectable emphasis |
+| **Safety scoring** | Weighted score from incident density, time-of-day factors, and proximity to seeded **safe nodes** (police, hospitals, 24h businesses); PostGIS-ready via Supabase geography columns |
+| **Heatmap layer** | Risk zones driven by the `incident_reports` table; toggleable overlay on the map control panel |
+| **Vibe-tag drop** | Click anywhere on the Mapbox canvas to drop a community vibe tag (unlit block, crowded area, suspicious activity, safe spot) |
 
-### ❌ CUT (Explicitly out of scope)
-*   **Continuous Background Audio Threat Detection**: Blocked by iOS Safari killing microphone access on screen lock.
-*   **Native iOS/Android Apps (React Native)**: Cut to prioritize a zero-friction mobile Web PWA.
-*   **Infrastructure Overhead**: Self-hosted routing engines (OSRM), standalone Python microservices, and S3 evidence encryption.
+**Key files:** `components/SafetyMap.tsx`, `app/api/navigation/route/route.ts`, `app/api/reports/route.ts`
+
+### Integrations & GhostCall — APIs & Demo Lead
+
+Owns external integrations, anonymous reporting, and the hackathon dress rehearsal.
+
+| Area | Implementation |
+|---|---|
+| **Twilio SMS (SOS)** | `POST /api/sos` fires SMS to trusted contacts with an unauthenticated tracking link (`/track/[id]`) |
+| **GhostCall** | Fullscreen fake incoming-call UI (`components/GhostCall.tsx`): Web Audio ringtone loop, answer/decline interaction, SpeechSynthesis voice line on pickup |
+| **Incident reporting** | Anonymous form + `POST /api/reports` NLP classifier; writes to `incident_reports` and feeds the VibeRoute heatmap |
+| **Demo seeding & pitch** | Realistic Rotterdam demo data (pre-loaded routes, heatmap zones, community feed, safe-node markers) so the core path works offline without API keys |
+
+**Key files:** `app/api/sos/route.ts`, `components/GhostCall.tsx`, `components/IncidentReporter.tsx`, `app/api/reports/route.ts`, `lib/supabase.ts`
 
 ---
 
-## 🛠️ Tech Stack
+## Features
 
-### 1. Frontend Web Client (`/frontend`)
-*   **Core**: React (v19) + Vite (v8) + TypeScript
-*   **Mapping**: Leaflet (`leaflet`, `react-leaflet`) with premium dark spatial tile overlays
-*   **Icons**: Lucide React (`lucide-react`)
-*   **Networking & Real-Time**: Axios client gateway + Socket.io-client for live location broadcasting
-*   **Styling**: Pure Vanilla CSS system (`index.css`) with curated dark-theme HSL color tokens and glassmorphism elements
+### 1. VibeRoute Safety Map
+- Mapbox GL JS dark overlay with pitched 3D perspective
+- Three candidate routes: **Safest AI-Corridor**, **Well-Lit Walkway**, and **Fastest Route** — each with a computed safety score pill
+- Toggleable overlay layers: heatmap, streetlights, foot traffic
+- Click-to-drop **vibe tags** with preset categories
+- Seeded safe-node markers (police stations, verified safe hubs)
+- Graceful offline fallback when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is not set
 
-### 2. Backend API Gateway (`/backend`)
-*   **Core**: Node.js + Express + TypeScript (`ts-node-dev` for hot-reloading development compiler)
-*   **Security & Auth**: JWT (`jsonwebtoken`) OTP-verification bypass stubs (accepts any 6-digit code for testing)
-*   **Real-time channels**: Socket.io server supporting live coordinator room connection
-*   **Database Schema**: Raw SQL tables definition supporting PostGIS spatial indexing (ready for PostgreSQL)
+### 2. Anonymous Incident Reporting & Live Heatmap
+- One-tap anonymous report form with optional location scrubbing
+- Backend NLP classifier (`/api/reports`) auto-tags category and severity (1–5)
+- AI review step: user confirms or adjusts tags before publishing
+- Community feed with upvote/downvote credibility scoring
+- Reports persist to `incident_reports` (PostGIS `POINT` geography) and feed route scoring
 
-### 3. AI Microservice (`/ai-services`)
-*   **Core**: Python 3.14 + FastAPI + Uvicorn
-*   **RAG Engine**: Pure Python TF-IDF database index compiler (`ingest.py`) + Cosine Similarity ranking matches retriever (`retriever.py`)
-*   **Language Model**: Google Gemini API integration (supporting `gemini-2.5-flash`, `gemini-3.5-flash`, and `gemini-flash-latest`)
-*   **Offline Fallback**: Resilient keyless mode mapping text segments and local emergency guide citations directly to the UI if no API key is provided
-*   **Incident Classifier**: NLP keyword scanner ranking category and severity from 1 (low) to 5 (critical)
+### 3. GhostCall — One-Tap De-escalation
+- Triggerable from the sidebar in under 2 taps from anywhere in the dashboard
+- Fullscreen simulated native call screen ("Dad ❤️")
+- Realistic dual-frequency ringtone via Web Audio API oscillators
+- Answering plays a pre-generated companion voice line via `SpeechSynthesis`
+- Connected-state dial pad mock with live call timer
+
+### 4. ShadowStream — SOS & Live Tracking
+- Giant pulsating SOS button with cancellable 5-second countdown
+- Browser-synthesized police siren via `AudioContext`
+- Webcam evidence feed on activation
+- Twilio SMS blast to trusted contacts with secure tracking link
+- Public `/track/[id]` page: live Mapbox map subscribed to Supabase Realtime `sos_events` updates
+- **Follow Me** mode with path-deviation check-ins and soft verification prompts
+
+### 5. Sahara AI Safety Assistant
+- Glassmorphic RAG chat grounded in `lib/rag_store.json` (local TF-IDF index)
+- Gemini 2.5 Flash integration with offline citation fallback
+- Crisis keyword interceptor: phrases like *"someone is following me"* auto-redirect to the SOS hub
+
+### 6. AuraSense Companion Mode (Stretch)
+- Stealth display that looks powered-off to onlookers
+- Screen Wake Lock API keeps the device active during walks
+- Periodic "Are you OK?" prompts escalating to SOS if ignored
 
 ---
 
-## 📂 Project Structure
+## Functional Requirements & Scope
+
+### MUST (Core Demo Path)
+
+| ID | Requirement | Status |
+|---|---|---|
+| **FR1** | **VibeRoute**: fastest + safest routes, color-coded safety scores, vibe-tag drops | Implemented |
+| **FR2** | **Anonymous reporting** → live heatmap → navigation scoring engine | Implemented |
+| **FR3** | **GhostCall**: fullscreen fake call, ringtone, voice line, <2 taps | Implemented |
+| **FR4** | **ShadowStream SOS**: GPS broadcast, Twilio SMS with tracking link, live map for contacts | Implemented |
+| **FR5** | **Trusted contacts** management (name + phone) | Implemented |
+
+### STRETCH
+
+| ID | Requirement | Status |
+|---|---|---|
+| **FR6** | **AuraSense** companion mode with Wake Lock | Implemented |
+| **FR7** | **Follow Me** / deviation alerts | Partial (client simulation + API stub) |
+
+### CUT
+
+- Continuous background audio threat detection (blocked by iOS Safari mic limits)
+- Native iOS/Android apps (React Native)
+- Self-hosted routing engines (OSRM), standalone Python microservices, S3 evidence encryption
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Framework** | Next.js 16 (App Router) + React 19 + TypeScript |
+| **Styling** | Tailwind CSS v4, glassmorphism dark theme (`app/globals.css`) |
+| **Mapping** | Mapbox GL JS v3 (`mapbox-gl`) |
+| **Database** | Supabase (PostgreSQL + PostGIS geography + Realtime WebSockets) |
+| **SMS** | Twilio (`twilio` SDK) |
+| **AI / RAG** | Google Gemini (`@google/genai`) + local TF-IDF index (`lib/rag_store.json`) |
+| **PWA** | `next-pwa` for installable mobile web experience |
+| **Icons** | Lucide React |
+
+---
+
+## Project Structure
 
 ```text
 Cloudz-v2v/
-├── frontend/            # React + Vite TypeScript client dashboard (maps, Sahara RAG chat, SOS webcams)
-├── backend/             # Node.js + Express TypeScript API gateway (auth, navigation proxy, SOS channels)
-├── ai-services/         # Python FastAPI AI microservice (RAG, NLP classifier, deviation anomalies)
-│   ├── main.py          # FastAPI startup and endpoints routing
-│   └── rag/             # RAG pipeline directory
-│       ├── documents/   # Safety manuals folder (rotterdam_safety_guide.md)
-│       └── rag_store.json # Local TF-IDF indexed database
-├── docs/                # Architecture and specifications overview
-├── docker-compose.yml   # Multi-service dev orchestration
-├── tsconfig.json        # Root compiler configuration rules
-└── .env                 # Environment config file (holding API keys)
+├── app/
+│   ├── api/
+│   │   ├── auth/           # OTP login/register stubs
+│   │   ├── chat/           # Sahara RAG + crisis interceptor
+│   │   ├── navigation/route/  # VibeRoute safety-scored paths + heatmap
+│   │   ├── reports/        # Anonymous incident classifier + PostGIS insert
+│   │   └── sos/            # Twilio SMS, follow-me, resolve endpoints
+│   ├── dashboard/          # Main PWA shell (tab routing)
+│   ├── track/[id]/       # Public live-tracking page (no auth)
+│   ├── layout.tsx
+│   ├── page.tsx            # Auth bypass → dashboard redirect
+│   └── globals.css
+├── components/
+│   ├── SafetyMap.tsx       # VibeRoute Mapbox canvas + vibe tags
+│   ├── GhostCall.tsx       # Fullscreen fake-call overlay
+│   ├── IncidentReporter.tsx
+│   ├── EmergencySOS.tsx
+│   ├── SaharaChat.tsx
+│   ├── AuraSense.tsx
+│   ├── Sidebar.tsx
+│   └── UserProfile.tsx
+├── lib/
+│   ├── supabase.ts         # Supabase client + offline mock fallback
+│   └── rag_store.json      # Local TF-IDF safety document index
+├── docs/
+│   └── architecture.md
+├── package.json
+└── tsconfig.json
 ```
 
 ---
 
-## 🚀 Setup & Launch Instructions
+## Setup & Launch
 
-Follow these instructions in three separate terminal tabs:
+### Prerequisites
 
-### 1. Root Configuration
-Create your environment file in the project root:
+- Node.js 20+
+- npm
+- (Optional) Supabase project with PostGIS enabled
+- (Optional) Mapbox, Twilio, and Gemini API keys for full integration
+
+### 1. Install dependencies
+
 ```powershell
-# Copy the template to active config
-cp .env.example .env
+npm install
 ```
-*(Open `.env` and fill in your optional `GEMINI_API_KEY=AIzaSy...` key. If left blank, Sahara will dynamically fall back to offline local citations search).*
+
+### 2. Configure environment
+
+Create `.env.local` in the project root:
+
+```env
+# Mapbox (VibeRoute map + live tracking)
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=pk.eyJ...
+
+# Supabase (incident_reports, sos_events, Realtime)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# Twilio (SOS SMS blast)
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_FROM_NUMBER=+1...
+
+# Site URL (tracking links in SMS)
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Gemini (Sahara RAG chat — optional, falls back to local citations)
+GEMINI_API_KEY=AIzaSy...
+```
+
+All keys are optional for the demo path. Without them, the app runs in **offline bypass mode** with seeded Rotterdam data and console-logged SMS stubs.
+
+### 3. Start the dev server
+
+```powershell
+npm run dev
+```
+
+Open **[http://localhost:3000](http://localhost:3000)** — the landing page auto-redirects to `/dashboard`.
+
+### 4. Production build
+
+```powershell
+npm run build
+npm start
+```
 
 ---
 
-### Tab 1: Start Python AI Services
-1. Navigate to the folder and install dependencies:
-   ```powershell
-   cd ai-services
-   pip install fastapi uvicorn pydantic python-dotenv google-generativeai
-   ```
-2. Run document ingestion once to build the local index database:
-   ```powershell
-   cd rag
-   python ingest.py
-   cd ..
-   ```
-3. Start the FastAPI microservice on port 8000:
-   ```powershell
-   python -m uvicorn main:app --port 8000
-   ```
-   *Health Check endpoint:* `GET http://localhost:8000/health`
+## Demo Dress Rehearsal (Pitch Flow)
+
+Run this sequence for a live demo without external API keys:
+
+1. **VibeRoute Map** — Show three scored routes; click the map to drop a vibe tag; toggle heatmap overlay
+2. **Report Incident** — Submit an anonymous report; review AI classification; publish to community feed
+3. **GhostCall** — Hit the sidebar GhostCall button; let it ring; answer and hear the companion voice line
+4. **Emergency SOS** — Trigger SOS countdown; show siren + webcam; contacts receive tracking link (logged to console in bypass mode)
+5. **Live Tracking** — Open `/track/[sosEventId]` in a second browser tab; watch simulated coordinate updates on Mapbox
+6. **Sahara Chat** — Ask *"What is the police number in Rotterdam?"* for RAG citations; type *"someone is following me"* to trigger crisis redirect
 
 ---
 
-### Tab 2: Start Node.js Express Gateway
-1. Navigate to the folder and install dependencies:
-   ```powershell
-   cd backend
-   npm install
-   ```
-2. Start the hot-reloading development server on port 4000:
-   ```powershell
-   npm start
-   ```
-   *Health Check endpoint:* `GET http://localhost:4000/health`
+## Database Schema (Supabase)
+
+Key tables expected by the API routes:
+
+| Table | Purpose |
+|---|---|
+| `incident_reports` | Anonymous safety reports with PostGIS `location` (geography POINT), `category`, `severity`, `confidence_score` |
+| `sos_events` | Active SOS sessions with `location_trail` (JSONB), `contacts_notified`, `status`, Realtime-enabled |
+| `safe_nodes` | Seeded proximity anchors (police, hospitals, 24h businesses) for PostGIS `ST_DWithin` scoring queries |
+
+Enable the **PostGIS** extension in Supabase and turn on **Realtime** for `sos_events`.
 
 ---
 
-### Tab 3: Start Vite Web Frontend
-1. Navigate to the folder and install dependencies:
-   ```powershell
-   cd frontend
-   npm install
-   ```
-2. Start the Vite hot-reloading client on port 5173:
-   ```powershell
-   npm run dev
-   ```
-3. Open your browser and go to **[http://localhost:5173/](http://localhost:5173/)** to access the premium web dashboard.
+## API Routes
+
+| Endpoint | Method | Owner | Description |
+|---|---|---|---|
+| `/api/navigation/route` | POST | VibeRoute | Returns safety-scored route paths + heatmap zones |
+| `/api/reports` | POST, GET | Integrations | Classify and persist anonymous incident reports |
+| `/api/sos` | POST | Integrations | Create SOS event, send Twilio SMS with tracking link |
+| `/api/sos/follow-me` | POST | Integrations | Start Follow Me monitoring session |
+| `/api/sos/resolve` | POST | Integrations | Mark SOS event as resolved |
+| `/api/chat` | POST | Sahara | RAG query with crisis keyword interception |
+| `/api/auth/login` | POST | Auth | OTP login stub |
+| `/api/auth/register` | POST | Auth | Registration stub |
 
 ---
 
-## 🔬 Testing Dashboard Features
+## Testing Checklist
 
-Once the 3 services are running, verify the following:
-*   **Ask Sahara (RAG Chat)**: Go to "Ask Sahara" and search: *"What is the police number in Rotterdam?"* Sahara will retrieve contacts and laws from your local safety document, citing them as clickable badges.
-*   **Automatic Intercept**: Type *"someone is following me"* in the Sahara chat. It will intercept the message, trigger an alert modal, and redirect you to the SOS Panel.
-*   **Emergency SOS**: Click the giant SOS button. The browser will beep a synthesized siren, countdown 5 seconds, and request webcam access for evidence logging.
+- [ ] VibeRoute renders three routes with safety score pills on Mapbox (or offline mock)
+- [ ] Click map canvas → vibe tag form → marker appears
+- [ ] Submit anonymous report → NLP classification review → appears in community feed
+- [ ] GhostCall rings, answers with voice line, ends cleanly
+- [ ] SOS countdown → siren → webcam → SMS stub/log with tracking URL
+- [ ] `/track/[id]` shows live marker updates via Supabase Realtime (or mock interval)
+- [ ] Sahara returns cited answers; crisis keywords redirect to SOS tab
+- [ ] Trusted contacts persist in localStorage via Profile Settings

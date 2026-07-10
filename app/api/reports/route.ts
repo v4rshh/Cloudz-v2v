@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (isSupabaseConfigured) {
       const supabase = createServiceClient();
 
-      const { data, error } = await supabase.rpc("create_incident_report_v2", {
+      const { data, error } = await supabase.rpc("create_incident_report", {
         p_lat: location.lat,
         p_lng: location.lng,
         p_category: classification.category,
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
     if (isSupabaseConfigured) {
       const supabase = createServiceClient();
 
-      const { data, error } = await supabase.rpc("get_incident_reports", {
+      const { data, error } = await (supabase as any).rpc("get_incident_reports", {
         p_status: includePending ? null : "approved",
       });
 
