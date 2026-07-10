@@ -60,6 +60,10 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
-
 data/reports.json
+
+# PWA service worker builds
+public/sw.js
+public/workbox-*.js
+public/sw.js.map
+public/workbox-*.js.map
