@@ -14,6 +14,18 @@ export default function TrackPage() {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
 
+  // Allow browser scroll on the tracking page for smaller mobile/laptop viewports
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      document.body.style.overflow = "auto";
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        document.body.style.overflow = "hidden";
+      }
+    };
+  }, []);
+
   async function fetchEvent() {
     const res = await fetch(`/api/sos/${id}`);
     const payload = await res.json().catch(() => ({}));

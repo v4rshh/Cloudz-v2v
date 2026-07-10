@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Navigation, 
@@ -17,6 +17,18 @@ export default function LandingPage() {
   const [slide, setSlide] = useState(0);
   const [consentGranted, setConsentGranted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Allow browser scroll on the landing page for shorter laptop viewports
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      document.body.style.overflow = "auto";
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        document.body.style.overflow = "hidden";
+      }
+    };
+  }, []);
 
   const onboardingSlides = [
     {
