@@ -1,16 +1,15 @@
 import type { LngLat } from "./mapbox";
 
 export type ReportCategory = "assault" | "stalking" | "harassment" | "infrastructure" | "other";
-export type ReportStatus = "pending" | "approved" | "rejected";
 
 export type SafetyReport = {
   id: string;
-  raw_text: string;
+  coords: LngLat; // [lng, lat]
   category: ReportCategory;
   severity: number; // 1-5
   confidence_score: number; // 0-1
-  coords: LngLat;
-  status: ReportStatus;
+  raw_text: string;
+  status?: string;
   created_at: string;
 };
 
@@ -28,23 +27,24 @@ type RawReport = {
   confidence_score: number;
   lat: number;
   lng: number;
-  status: ReportStatus;
+  status?: string;
   created_at: string;
 };
 
 function toSafetyReport(raw: RawReport): SafetyReport {
   return {
     id: raw.id,
-    raw_text: raw.raw_text,
+    coords: [raw.lng, raw.lat],
     category: raw.category,
     severity: raw.severity,
     confidence_score: raw.confidence_score,
-    coords: [raw.lng, raw.lat],
+    raw_text: raw.raw_text,
     status: raw.status,
     created_at: raw.created_at,
   };
 }
 
+/** Fetch approved safety reports (real Supabase data — offline fallback returns []). */
 export async function fetchReports(): Promise<SafetyReport[]> {
   const res = await fetch("/api/reports", { cache: "no-store" });
   if (!res.ok) return [];
@@ -53,24 +53,26 @@ export async function fetchReports(): Promise<SafetyReport[]> {
   return rows.map(toSafetyReport);
 }
 
+/** Submit a free-text incident report at a location. Returns the classification always,
+ *  and the persisted report only when the backend actually stored one (Supabase configured). */
 export async function submitReport(
   text: string,
-  coords: LngLat,
-  anonymous: boolean
-): Promise<{ report: SafetyReport | null; classification: ReportClassification | null }> {
+  coords: LngLat, // [lng, lat]
+  anonymous = true
+): Promise<{ report: SafetyReport | null; classification: ReportClassification }> {
   const res = await fetch("/api/reports", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text,
-      location: { lng: coords[0], lat: coords[1] },
-      anonymous,
-    }),
+    body: JSON.stringify({ text, location: { lat: coords[1], lng: coords[0] }, anonymous }),
   });
-  if (!res.ok) return { report: null, classification: null };
+
   const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error ?? `Report submission failed (${res.status})`);
+  }
+
   return {
     report: data.report ? toSafetyReport(data.report) : null,
-    classification: data.classification ?? null,
+    classification: data.classification as ReportClassification,
   };
 }

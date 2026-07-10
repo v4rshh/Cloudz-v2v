@@ -1,4 +1,6 @@
-/** VibeRoute map + routing helpers — no API key required */
+/** VibeRoute map + routing helpers. Uses real Mapbox GL JS + Directions API when
+ *  NEXT_PUBLIC_MAPBOX_TOKEN is set; falls back to a free OSM/OSRM stack otherwise
+ *  so the app still runs without a key. */
 
 export type LngLat = [number, number];
 
@@ -6,12 +8,18 @@ export const ROTTERDAM_CENTER: LngLat = [4.47917, 51.9225];
 export const DEMO_START: LngLat = [4.47917, 51.9225];
 export const DEMO_END: LngLat = [4.486, 51.916];
 
+/** Real Mapbox dark style — used when a Mapbox token is configured. */
+export const MAPBOX_DARK_STYLE = "mapbox://styles/mapbox/dark-v11";
+
+/** Free CartoDB dark style — used as a fallback with MapLibre when no token is set. */
 export const DARK_MAP_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-function getMapboxAccessToken(): string | null {
+export function getMapboxAccessToken(): string | null {
   return process.env.NEXT_PUBLIC_MAPBOX_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || null;
 }
+
+export const hasMapboxToken = Boolean(getMapboxAccessToken());
 
 function buildDirectionsUrl(
   start: LngLat,

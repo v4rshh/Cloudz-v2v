@@ -1,21 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import type { FeatureCollection } from "geojson";
 import {
   DEMO_END,
   DEMO_START,
   DARK_MAP_STYLE,
+  MAPBOX_DARK_STYLE,
   ROTTERDAM_CENTER,
   fetchDirections,
   fetchRouteAlternatives,
   formatDistance,
   formatDuration,
   geocodePlace,
+  getMapboxAccessToken,
   type DirectionsResult,
   type LngLat,
 } from "@/lib/mapbox";
+
+const mapboxToken = getMapboxAccessToken();
+if (mapboxToken) {
+  mapboxgl.accessToken = mapboxToken;
+}
 import { scoreRouteSafety, type SafetyBreakdown } from "@/lib/safety";
 import {
   fetchReports,
@@ -27,10 +35,56 @@ import {
 type ClickMode = "off" | "start" | "end" | "report";
 type RouteKind = "fastest" | "safest";
 
+// Mirrors the shape returned by app/api/route-safety/route.ts
+type SegmentScore = {
+  from: LngLat;
+  to: LngLat;
+  score: number;
+  riskLevel: "safe" | "amber" | "risky";
+};
+
+type RouteSafetyResult = {
+  segments: SegmentScore[];
+  overallScore: number;
+};
+
 type ScoredRoute = DirectionsResult & {
   kind: RouteKind;
-  safety: SafetyBreakdown;
+  safety: SafetyBreakdown; // client-side heuristic — still used for "N report(s) nearby" / night-time copy
+  segments: SegmentScore[]; // server-side per-segment scoring — drives the line color on the map
+  overallScore: number; // server-side overall score — drives the "Safety X/100" badge
 };
+
+const SEGMENT_COLOR: Record<SegmentScore["riskLevel"] | "unknown", string> = {
+  safe: "#22c55e",
+  amber: "#f59e0b",
+  risky: "#ef4444",
+  unknown: "#64748b",
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SEGMENT_COLOR_EXPRESSION: any = [
+  "match",
+  ["get", "riskLevel"],
+  "safe", SEGMENT_COLOR.safe,
+  "amber", SEGMENT_COLOR.amber,
+  "risky", SEGMENT_COLOR.risky,
+  SEGMENT_COLOR.unknown,
+];
+
+async function fetchRouteSafety(coordinates: LngLat[]): Promise<RouteSafetyResult> {
+  const res = await fetch("/api/route-safety", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ coordinates }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error ?? `route-safety failed (${res.status})`);
+  }
+  return { segments: data.segments as SegmentScore[], overallScore: data.overallScore as number };
+}
 
 function severityColor(severity: number): string {
   const clamped = Math.max(1, Math.min(5, severity));
@@ -77,15 +131,50 @@ const EMPTY_ROUTE: FeatureCollection = {
   features: [],
 };
 
-function pickRoutes(candidates: DirectionsResult[], reports: SafetyReport[]): ScoredRoute[] {
-  const scored = candidates.map((c) => ({
-    ...c,
-    kind: "fastest" as RouteKind,
-    safety: scoreRouteSafety(c.coordinates, reports),
-  }));
+const HEATMAP_SOURCE_ID = "incident-heatmap";
+const HEATMAP_LAYER_ID = "incident-heatmap-layer";
+
+// One weighted point per approved incident_reports row. Weight blends
+// severity (1-5) and classifier confidence so a high-severity, high-confidence
+// report contributes more heat than a low-confidence "other" report.
+function reportsToHeatmapData(list: SafetyReport[]): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: list.map((r) => ({
+      type: "Feature",
+      properties: { weight: (r.severity / 5) * r.confidence_score },
+      geometry: { type: "Point", coordinates: r.coords },
+    })),
+  };
+}
+
+async function scoreAndPickRoutes(
+  candidates: DirectionsResult[],
+  reports: SafetyReport[]
+): Promise<ScoredRoute[]> {
+  const scored = await Promise.all(
+    candidates.map(async (c) => {
+      const safety = scoreRouteSafety(c.coordinates, reports);
+      // Server-side segment scoring drives both the map coloring and the
+      // "safest" pick. If the API is unreachable, fall back to the client
+      // heuristic so routing still works — just without segment coloring.
+      let segments: SegmentScore[] = [];
+      let overallScore = safety.score;
+      try {
+        const result = await fetchRouteSafety(c.coordinates);
+        segments = result.segments;
+        overallScore = result.overallScore;
+      } catch (err) {
+        // Surfaced instead of swallowed — a flat/repeated score usually means
+        // this is firing on every route and falling back to the client heuristic.
+        console.error("route-safety fetch failed, falling back to client heuristic:", err);
+      }
+      return { ...c, kind: "fastest" as RouteKind, safety, segments, overallScore };
+    })
+  );
 
   const fastest = [...scored].sort((a, b) => a.durationSeconds - b.durationSeconds)[0];
-  const safest = [...scored].sort((a, b) => b.safety.score - a.safety.score)[0];
+  const safest = [...scored].sort((a, b) => b.overallScore - a.overallScore)[0];
 
   const results: ScoredRoute[] = [{ ...fastest, kind: "fastest" }];
   if (JSON.stringify(safest.coordinates) !== JSON.stringify(fastest.coordinates)) {
@@ -100,10 +189,10 @@ function escapeHtml(input: string): string {
 
 export default function VibeRoutePage() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const startMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const endMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const reportMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const startMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const endMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const reportMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   const [originText, setOriginText] = useState("Rotterdam Centrum");
   const [destinationText, setDestinationText] = useState("Erasmus University Rotterdam");
@@ -118,6 +207,7 @@ export default function VibeRoutePage() {
   const [activeKind, setActiveKind] = useState<RouteKind>("fastest");
 
   const [reports, setReports] = useState<SafetyReport[]>([]);
+  const [showHeatmap, setShowHeatmap] = useState(true);
   const [pendingReportCoords, setPendingReportCoords] = useState<LngLat | null>(null);
   const [reportText, setReportText] = useState("");
   const [reportAnonymous, setReportAnonymous] = useState(true);
@@ -130,9 +220,9 @@ export default function VibeRoutePage() {
       if (!map) return;
       const ref = kind === "start" ? startMarkerRef : endMarkerRef;
       ref.current?.remove();
-      ref.current = new maplibregl.Marker({ element: createMarkerElement(label, color), anchor: "bottom" })
+      ref.current = new mapboxgl.Marker({ element: createMarkerElement(label, color), anchor: "bottom" })
         .setLngLat(coords)
-        .setPopup(new maplibregl.Popup({ offset: 20 }).setHTML(`<strong>${label}</strong>`))
+        .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`<strong>${label}</strong>`))
         .addTo(map);
     },
     []
@@ -150,11 +240,14 @@ export default function VibeRoutePage() {
           ${new Date(r.created_at).toLocaleDateString()} · confidence ${Math.round(r.confidence_score * 100)}%
         </p>
       `;
-      return new maplibregl.Marker({ element: createReportMarkerElement(r.severity), anchor: "center" })
+      return new mapboxgl.Marker({ element: createReportMarkerElement(r.severity), anchor: "center" })
         .setLngLat(r.coords)
-        .setPopup(new maplibregl.Popup({ offset: 12 }).setHTML(popupHtml))
+        .setPopup(new mapboxgl.Popup({ offset: 12 }).setHTML(popupHtml))
         .addTo(map);
     });
+
+    const heatmapSource = map.getSource(HEATMAP_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+    heatmapSource?.setData(reportsToHeatmapData(list));
   }, []);
 
   const loadReports = useCallback(async () => {
@@ -168,13 +261,31 @@ export default function VibeRoutePage() {
     const map = mapRef.current;
     if (!map) return;
     for (const kind of ["fastest", "safest"] as RouteKind[]) {
-      const source = map.getSource(`route-${kind}`) as maplibregl.GeoJSONSource | undefined;
+      const source = map.getSource(`route-${kind}`) as mapboxgl.GeoJSONSource | undefined;
       const match = allRoutes.find((r) => r.kind === kind);
-      source?.setData(
-        match
-          ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: match.coordinates } }
-          : EMPTY_ROUTE
-      );
+
+      const data: FeatureCollection = !match
+        ? EMPTY_ROUTE
+        : {
+            type: "FeatureCollection",
+            features: match.segments.length
+              ? match.segments.map((seg) => ({
+                  type: "Feature",
+                  properties: { riskLevel: seg.riskLevel, score: seg.score },
+                  geometry: { type: "LineString", coordinates: [seg.from, seg.to] },
+                }))
+              : [
+                  // route-safety API was unreachable — draw a single unscored line
+                  // rather than nothing, so routing still visibly works.
+                  {
+                    type: "Feature",
+                    properties: { riskLevel: "unknown", score: match.overallScore },
+                    geometry: { type: "LineString", coordinates: match.coordinates },
+                  },
+                ],
+          };
+
+      source?.setData(data);
       map.setPaintProperty(
         `route-${kind}-layer`,
         "line-opacity",
@@ -185,7 +296,7 @@ export default function VibeRoutePage() {
     if (activeRoute) {
       const bounds = activeRoute.coordinates.reduce(
         (b, coord) => b.extend(coord),
-        new maplibregl.LngLatBounds(activeRoute.coordinates[0], activeRoute.coordinates[0])
+        new mapboxgl.LngLatBounds(activeRoute.coordinates[0], activeRoute.coordinates[0])
       );
       map.fitBounds(bounds, { padding: 100, maxZoom: 15, duration: 800 });
     }
@@ -195,7 +306,7 @@ export default function VibeRoutePage() {
     const map = mapRef.current;
     if (!map) return;
     for (const kind of ["fastest", "safest"] as RouteKind[]) {
-      const source = map.getSource(`route-${kind}`) as maplibregl.GeoJSONSource | undefined;
+      const source = map.getSource(`route-${kind}`) as mapboxgl.GeoJSONSource | undefined;
       source?.setData(EMPTY_ROUTE);
     }
   }, []);
@@ -227,7 +338,7 @@ export default function VibeRoutePage() {
         candidates = [await fetchDirections(start, end)];
       }
 
-      const picked = pickRoutes(candidates, latestReports);
+      const picked = await scoreAndPickRoutes(candidates, latestReports);
       setRoutes(picked);
       setActiveKind("fastest");
       drawRoutes(picked, "fastest");
@@ -270,25 +381,54 @@ export default function VibeRoutePage() {
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
-    const map = new maplibregl.Map({
+    const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: DARK_MAP_STYLE,
+      style: mapboxToken ? MAPBOX_DARK_STYLE : DARK_MAP_STYLE,
       center: ROTTERDAM_CENTER,
       zoom: 13.5,
       pitch: 35,
       bearing: -12,
     });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
     mapRef.current = map;
 
     map.on("load", () => {
+      // Heatmap goes in first so it's added — and therefore stacked — below
+      // the route lines and markers that get added after it.
+      map.addSource(HEATMAP_SOURCE_ID, { type: "geojson", data: EMPTY_ROUTE });
+      map.addLayer({
+        id: HEATMAP_LAYER_ID,
+        type: "heatmap",
+        source: HEATMAP_SOURCE_ID,
+        paint: {
+          "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
+          "heatmap-color": [
+            "interpolate",
+            ["linear"],
+            ["heatmap-density"],
+            0, "rgba(0,0,0,0)",
+            0.2, "rgba(34,197,94,0.45)",
+            0.4, "rgba(250,204,21,0.55)",
+            0.6, "rgba(251,146,60,0.65)",
+            0.8, "rgba(249,115,22,0.8)",
+            1, "rgba(239,68,68,0.9)",
+          ],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 14, 16, 34],
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.85, 17, 0.4],
+        },
+      });
+
+      // Both route sources hold one Feature per scored segment (not one
+      // Feature for the whole route), so line-color can be data-driven off
+      // each segment's riskLevel from /api/route-safety.
       map.addSource("route-fastest", { type: "geojson", data: EMPTY_ROUTE });
       map.addLayer({
         id: "route-fastest-layer",
         type: "line",
         source: "route-fastest",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#2dd4bf", "line-width": 5, "line-opacity": 0.95 },
+        paint: { "line-color": SEGMENT_COLOR_EXPRESSION, "line-width": 5, "line-opacity": 0.95 },
       });
 
       map.addSource("route-safest", { type: "geojson", data: EMPTY_ROUTE });
@@ -297,12 +437,12 @@ export default function VibeRoutePage() {
         type: "line",
         source: "route-safest",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#a78bfa", "line-width": 5, "line-opacity": 0.35 },
+        paint: { "line-color": SEGMENT_COLOR_EXPRESSION, "line-width": 5, "line-opacity": 0.35 },
       });
 
       placeOrMoveMarker("start", DEMO_START, "Start", "#2dd4bf");
       placeOrMoveMarker("end", DEMO_END, "End", "#fb7185");
-      const bounds = new maplibregl.LngLatBounds();
+      const bounds = new mapboxgl.LngLatBounds();
       bounds.extend(DEMO_START);
       bounds.extend(DEMO_END);
       map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
@@ -325,7 +465,7 @@ export default function VibeRoutePage() {
     const cursor = clickMode === "start" ? "crosshair" : clickMode === "end" ? "pointer" : "cell";
     map.getCanvas().style.cursor = cursor;
 
-    const onClick = (e: maplibregl.MapMouseEvent) => {
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
       const coords: LngLat = [e.lngLat.lng, e.lngLat.lat];
       if (clickMode === "start") {
         setStartCoords(coords);
@@ -355,6 +495,12 @@ export default function VibeRoutePage() {
     if (routes.length) drawRoutes(routes, activeKind);
   }, [activeKind, routes, drawRoutes]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    map.setLayoutProperty(HEATMAP_LAYER_ID, "visibility", showHeatmap ? "visible" : "none");
+  }, [showHeatmap, mapReady]);
+
   const fastestRoute = routes.find((r) => r.kind === "fastest");
   const safestRoute = routes.find((r) => r.kind === "safest");
   const hasChoice = routes.length > 1;
@@ -382,8 +528,34 @@ export default function VibeRoutePage() {
         {clickMode === "report" ? "Tap map to flag…" : "⚠ Report unsafe spot"}
       </button>
 
+      <button
+        type="button"
+        onClick={() => setShowHeatmap((v) => !v)}
+        className={`absolute right-4 top-40 z-10 rounded-lg border px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur-md transition ${
+          showHeatmap
+            ? "border-orange-400 bg-orange-500/20 text-orange-200"
+            : "border-white/10 bg-slate-950/85 text-slate-200 hover:border-white/20"
+        }`}
+      >
+        {showHeatmap ? "🔥 Heatmap on" : "🔥 Heatmap off"}
+      </button>
+
+      {routes.length > 0 && (
+        <div className="pointer-events-none absolute right-4 bottom-40 z-10 flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/85 px-3 py-2 text-[10px] text-slate-300 backdrop-blur-md">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: SEGMENT_COLOR.safe }} /> Safe
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: SEGMENT_COLOR.amber }} /> Caution
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: SEGMENT_COLOR.risky }} /> Risky
+          </span>
+        </div>
+      )}
+
       {pendingReportCoords && (
-        <div className="absolute right-4 top-40 z-20 w-64 rounded-xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-md">
+        <div className="absolute right-4 top-56 z-20 w-64 rounded-xl border border-white/10 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-md">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-amber-300">
             Describe what happened
           </p>
@@ -424,7 +596,7 @@ export default function VibeRoutePage() {
       )}
 
       {lastClassification && !pendingReportCoords && (
-        <div className="absolute right-4 top-40 z-20 w-64 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
+        <div className="absolute right-4 top-56 z-20 w-64 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-md">
           <p className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Report received</p>
           <p className="mt-1 text-xs text-slate-300 capitalize">
             Classified as {lastClassification.category} · severity {lastClassification.severity}/5
@@ -500,7 +672,7 @@ export default function VibeRoutePage() {
                   {formatDistance(fastestRoute.distanceMeters)} · {formatDuration(fastestRoute.durationSeconds)}
                 </p>
                 <p className="text-[10px] text-slate-500">
-                  Safety {fastestRoute.safety.score}/100
+                  Safety {fastestRoute.overallScore}/100
                   {fastestRoute.safety.riskHits > 0 && ` · ${fastestRoute.safety.matchedReports.length} report(s) nearby`}
                 </p>
               </button>
@@ -518,7 +690,7 @@ export default function VibeRoutePage() {
                   {formatDistance(safestRoute.distanceMeters)} · {formatDuration(safestRoute.durationSeconds)}
                 </p>
                 <p className="text-[10px] text-slate-500">
-                  Safety {safestRoute.safety.score}/100
+                  Safety {safestRoute.overallScore}/100
                   {safestRoute.safety.riskHits > 0 && ` · ${safestRoute.safety.matchedReports.length} report(s) nearby`}
                 </p>
               </button>
@@ -533,7 +705,7 @@ export default function VibeRoutePage() {
         )}
 
         <p className="mt-2 text-center text-[10px] text-slate-500">
-          {reports.length} approved safety report{reports.length === 1 ? "" : "s"} loaded
+          {reports.length} safety report{reports.length === 1 ? "" : "s"} loaded
         </p>
 
         {error && <p className="mt-3 text-center text-xs text-rose-400">{error}</p>}

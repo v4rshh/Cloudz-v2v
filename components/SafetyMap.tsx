@@ -1,17 +1,25 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
-import { DARK_MAP_STYLE } from "@/lib/mapbox";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+import { getMapboxAccessToken, MAPBOX_DARK_STYLE } from "@/lib/mapbox";
+import { fetchVibeTags, submitVibeTag, VIBE_TAG_OPTIONS, type VibeTag } from "@/lib/vibe-tags";
 import {
   Navigation,
   Lightbulb,
   Eye,
-  Users,
-  Plus
+  Users
 } from "lucide-react";
 
 const ROTTERDAM: [number, number] = [4.47917, 51.9225];
+const ORIGIN = { lat: 51.9225, lng: 4.47917 };
+const DESTINATION = { lat: 51.9160, lng: 4.4860 };
+
+const token = getMapboxAccessToken();
+if (token) {
+  mapboxgl.accessToken = token;
+}
 
 interface Route {
   id: string;
@@ -29,116 +37,70 @@ interface HeatmapZone {
   reason: string;
 }
 
-interface VibeTag {
-  id: string;
-  lat: number;
-  lng: number;
-  tag: string;
-  created_at: string;
-}
-
 export default function SafetyMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
 
-  const [origin, setOrigin] = useState("Centrum, Rotterdam");
-  const [destination, setDestination] = useState("Erasmus University Area, Rotterdam");
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [selectedRouteId, setSelectedRouteId] = useState("route_3");
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [heatmapZones, setHeatmapZones] = useState<HeatmapZone[]>([]);
-  const [vibeTags, setVibeTags] = useState<VibeTag[]>([
-    { id: "v1", lat: 51.9245, lng: 4.4830, tag: "⚠️ Unlit alleyway", created_at: new Date().toISOString() },
-    { id: "v2", lat: 51.9190, lng: 4.4850, tag: "👥 Crowded area", created_at: new Date().toISOString() }
-  ]);
+  const [vibeTags, setVibeTags] = useState<VibeTag[]>([]);
 
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showWellLit, setShowWellLit] = useState(true);
   const [showFootTraffic, setShowFootTraffic] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [showVibeForm, setShowVibeForm] = useState(false);
   const [clickedCoords, setClickedCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [vibeText, setVibeText] = useState("⚠️ Unlit block");
+  const [vibeText, setVibeText] = useState<string>(VIBE_TAG_OPTIONS[0]);
+  const [savingVibeTag, setSavingVibeTag] = useState(false);
+  const [vibeTagError, setVibeTagError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRoutesAndHeatmap();
+  const loadVibeTags = useCallback(async () => {
+    const tags = await fetchVibeTags();
+    setVibeTags(tags);
   }, []);
 
-  const fetchRoutesAndHeatmap = async () => {
+  const fetchRoutesAndHeatmap = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch("/api/navigation/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          origin: { lat: 51.9225, lng: 4.47917 },
-          destination: { lat: 51.9160, lng: 4.4860 }
-        })
+        body: JSON.stringify({ origin: ORIGIN, destination: DESTINATION })
       });
       const data = await res.json();
-      if (data.routes) setRoutes(data.routes);
-      if (data.heatmap) setHeatmapZones(data.heatmap);
+      if (!res.ok || data.error) {
+        throw new Error(data.error ?? `navigation/route failed (${res.status})`);
+      }
+      setRoutes(data.routes ?? []);
+      setHeatmapZones(data.heatmap ?? []);
+      if (data.routes?.length) setSelectedRouteId(data.routes[0].id);
     } catch (err) {
       console.error("Error loading routing navigation endpoints:", err);
-      setRoutes([
-        {
-          id: "route_3",
-          label: "Safest AI-Corridor",
-          safety_score: 94.6,
-          color: "#48c78e",
-          details: "AI Safe Corridor. High camera density & active community responders.",
-          path: [
-            [4.47917, 51.9225],
-            [4.4810, 51.9240],
-            [4.4880, 51.9230],
-            [4.4890, 51.9180],
-            [4.4860, 51.9160]
-          ]
-        },
-        {
-          id: "route_2",
-          label: "Well-Lit Walkway",
-          safety_score: 74.2,
-          color: "#ffe08a",
-          details: "Runs along main commercial streets with 90% streetlight coverage.",
-          path: [
-            [4.47917, 51.9225],
-            [4.4840, 51.9230],
-            [4.4870, 51.9200],
-            [4.4860, 51.9160]
-          ]
-        },
-        {
-          id: "route_1",
-          label: "Fastest Route",
-          safety_score: 38.5,
-          color: "#ff3860",
-          details: "Fastest path, but goes through isolated alleys & poor lighting.",
-          path: [
-            [4.47917, 51.9225],
-            [4.4820, 51.9210],
-            [4.4830, 51.9180],
-            [4.4860, 51.9160]
-          ]
-        }
-      ]);
-      setHeatmapZones([
-        { lat: 51.9200, lng: 4.4825, risk_intensity: 0.82, reason: "Recent dark harassment report" },
-        { lat: 51.9215, lng: 4.4865, risk_intensity: 0.65, reason: "Unlit street construction" },
-        { lat: 51.9175, lng: 4.4840, risk_intensity: 0.74, reason: "Stalking incident reported" }
-      ]);
+      setLoadError(err instanceof Error ? err.message : "Could not load routes");
+      setRoutes([]);
+      setHeatmapZones([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (!mapContainerRef.current) return;
+    fetchRoutesAndHeatmap();
+    loadVibeTags();
+  }, [fetchRoutesAndHeatmap, loadVibeTags]);
 
-    const map = new maplibregl.Map({
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: DARK_MAP_STYLE,
+      style: token ? MAPBOX_DARK_STYLE : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
       center: ROTTERDAM,
       zoom: 13.5,
       pitch: 35,
@@ -148,34 +110,114 @@ export default function SafetyMap() {
     mapRef.current = map;
 
     map.on("load", () => {
-      drawRoutes(map);
+      map.addSource("heatmap-src", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "heatmap-layer",
+        type: "heatmap",
+        source: "heatmap-src",
+        paint: {
+          "heatmap-weight": ["interpolate", ["linear"], ["get", "intensity"], 0, 0, 1, 1],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 8, 15, 30],
+          "heatmap-opacity": 0.75
+        }
+      });
+
       map.on("click", (e) => {
         setClickedCoords({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        setVibeTagError(null);
         setShowVibeForm(true);
       });
     });
 
     return () => {
       map.remove();
+      mapRef.current = null;
     };
-  }, [routes]);
+  }, []);
 
+  // Draw / refresh route lines whenever routes load.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const draw = () => {
+      routes.forEach(r => {
+        const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: r.path }
+        };
+
+        const source = map.getSource(`route-src-${r.id}`) as mapboxgl.GeoJSONSource | undefined;
+        if (source) {
+          source.setData(geojson);
+          return;
+        }
+
+        map.addSource(`route-src-${r.id}`, { type: "geojson", data: geojson });
+        map.addLayer({
+          id: `route-layer-${r.id}`,
+          type: "line",
+          source: `route-src-${r.id}`,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": r.color,
+            "line-width": r.id === selectedRouteId ? 6 : 3,
+            "line-opacity": r.id === selectedRouteId ? 0.9 : 0.25
+          }
+        });
+      });
+
+      if (routes.length) {
+        const bounds = routes[0].path.reduce(
+          (b, coord) => b.extend(coord as [number, number]),
+          new mapboxgl.LngLatBounds(routes[0].path[0] as [number, number], routes[0].path[0] as [number, number])
+        );
+        map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 600 });
+      }
+    };
+
+    if (map.isStyleLoaded()) draw();
+    else map.once("load", draw);
+  }, [routes, selectedRouteId]);
+
+  // Update line emphasis when the selected route changes.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded() || routes.length === 0) return;
 
     routes.forEach(r => {
       const isSelected = r.id === selectedRouteId;
-      const opacity = isSelected ? 0.9 : 0.25;
-      const width = isSelected ? 6 : 3;
-
       if (map.getLayer(`route-layer-${r.id}`)) {
-        map.setPaintProperty(`route-layer-${r.id}`, "line-opacity", opacity);
-        map.setPaintProperty(`route-layer-${r.id}`, "line-width", width);
+        map.setPaintProperty(`route-layer-${r.id}`, "line-opacity", isSelected ? 0.9 : 0.25);
+        map.setPaintProperty(`route-layer-${r.id}`, "line-width", isSelected ? 6 : 3);
       }
     });
   }, [selectedRouteId, routes]);
 
+  // Update the heatmap source with real incident data.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const source = map.getSource("heatmap-src") as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const data: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: showHeatmap
+        ? heatmapZones.map(z => ({
+            type: "Feature",
+            properties: { intensity: z.risk_intensity },
+            geometry: { type: "Point", coordinates: [z.lng, z.lat] }
+          }))
+        : []
+    };
+    source.setData(data);
+  }, [heatmapZones, showHeatmap]);
+
+  // Vibe-tag markers (real data from Supabase, via /api/vibe-tags).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -183,98 +225,42 @@ export default function SafetyMap() {
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
-    const safeZones = [
-      { name: "Centrum Police Station", lat: 51.9238, lng: 4.4851 },
-      { name: "Erasmus Haven", lat: 51.9175, lng: 4.4805 }
-    ];
-
-    safeZones.forEach(z => {
-      const el = document.createElement("div");
-      el.style.backgroundColor = "#485fc7";
-      el.style.width = "20px";
-      el.style.height = "20px";
-      el.style.borderRadius = "50%";
-      el.style.border = "2px solid white";
-      el.style.display = "flex";
-      el.style.alignItems = "center";
-      el.style.justifyContent = "center";
-      el.style.color = "white";
-      el.style.fontWeight = "bold";
-      el.style.fontSize = "10px";
-      el.innerHTML = "P";
-
-      const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`<h4>${z.name}</h4><p>24/7 Verified Safe Hub</p>`);
-
-      const marker = new maplibregl.Marker(el)
-        .setLngLat([z.lng, z.lat])
-        .setPopup(popup)
-        .addTo(map);
-
-      markersRef.current.push(marker);
-    });
-
     vibeTags.forEach(v => {
       const el = document.createElement("div");
       el.style.fontSize = "18px";
       el.style.cursor = "pointer";
       el.innerHTML = "📍";
 
-      const popup = new maplibregl.Popup({ offset: 15 }).setHTML(`<strong>Vibe Tag</strong><p>${v.tag}</p>`);
+      const popup = new mapboxgl.Popup({ offset: 15 }).setHTML(
+        `<strong>Vibe Tag</strong><p>${v.tag}</p><p style="font-size:10px;opacity:0.6;">${new Date(v.created_at).toLocaleString()}</p>`
+      );
 
-      const marker = new maplibregl.Marker(el)
-        .setLngLat([v.lng, v.lat])
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat(v.coords)
         .setPopup(popup)
         .addTo(map);
 
       markersRef.current.push(marker);
     });
-  }, [vibeTags, routes]);
+  }, [vibeTags]);
 
-  const drawRoutes = (map: maplibregl.Map) => {
-    routes.forEach(r => {
-      const geojson: any = {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: r.path
-        }
-      };
-
-      map.addSource(`route-src-${r.id}`, {
-        type: "geojson",
-        data: geojson
-      });
-
-      map.addLayer({
-        id: `route-layer-${r.id}`,
-        type: "line",
-        source: `route-src-${r.id}`,
-        layout: {
-          "line-join": "round",
-          "line-cap": "round"
-        },
-        paint: {
-          "line-color": r.color,
-          "line-width": r.id === selectedRouteId ? 6 : 3,
-          "line-opacity": r.id === selectedRouteId ? 0.9 : 0.25
-        }
-      });
-    });
-  };
-
-  const handleAddVibeTag = () => {
+  const handleAddVibeTag = async () => {
     if (!clickedCoords) return;
-    const newTag: VibeTag = {
-      id: crypto.randomUUID(),
-      lat: clickedCoords.lat,
-      lng: clickedCoords.lng,
-      tag: vibeText,
-      created_at: new Date().toISOString()
-    };
-    setVibeTags([...vibeTags, newTag]);
-    setShowVibeForm(false);
-    setClickedCoords(null);
+    setSavingVibeTag(true);
+    setVibeTagError(null);
+    try {
+      const saved = await submitVibeTag(vibeText, [clickedCoords.lng, clickedCoords.lat]);
+      if (!saved) {
+        setVibeTagError("Couldn't save this tag. Try again.");
+        return;
+      }
+      setVibeTags(prev => [...prev, saved]);
+      setShowVibeForm(false);
+      setClickedCoords(null);
+      setVibeText(VIBE_TAG_OPTIONS[0]);
+    } finally {
+      setSavingVibeTag(false);
+    }
   };
 
   return (
@@ -323,16 +309,30 @@ export default function SafetyMap() {
             <select
               value={vibeText}
               onChange={(e) => setVibeText(e.target.value)}
-              className="w-full text-xs bg-slate-900 border border-white/10 rounded p-2 mb-3 text-white"
+              className="w-full text-xs bg-slate-900 border border-white/10 rounded p-2 mb-2 text-white"
             >
-              <option value="⚠️ Unlit block">⚠️ Unlit block</option>
-              <option value="👥 Crowded/Rowdy area">👥 Crowded/Rowdy area</option>
-              <option value="🚨 Suspicious activity">🚨 Suspicious activity</option>
-              <option value="💡 Safe Spot / 24H Shop">💡 Safe Spot / 24H Shop</option>
+              {VIBE_TAG_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
             </select>
+            {vibeTagError && (
+              <p className="text-[10px] text-rose-400 mb-2">{vibeTagError}</p>
+            )}
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowVibeForm(false)} className="btn btn-secondary text-[10px] py-1 px-3">Cancel</button>
-              <button onClick={handleAddVibeTag} className="btn btn-primary text-[10px] py-1 px-3 bg-teal-600 hover:bg-teal-500">Save</button>
+              <button
+                onClick={() => { setShowVibeForm(false); setVibeTagError(null); }}
+                disabled={savingVibeTag}
+                className="btn btn-secondary text-[10px] py-1 px-3"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddVibeTag}
+                disabled={savingVibeTag}
+                className="btn btn-primary text-[10px] py-1 px-3 bg-teal-600 hover:bg-teal-500 disabled:opacity-50"
+              >
+                {savingVibeTag ? "Saving…" : "Save"}
+              </button>
             </div>
           </div>
         )}
@@ -340,7 +340,11 @@ export default function SafetyMap() {
 
       <div className="p-6 bg-slate-900/40 border-t border-white/5">
         <h4 className="text-xs text-slate-400 font-bold mb-3 uppercase tracking-wider">Candidate Routes</h4>
+        {loadError && <p className="text-xs text-rose-400 mb-3">{loadError}</p>}
         <div className="flex flex-col gap-3">
+          {routes.length === 0 && !loading && !loadError && (
+            <p className="text-xs text-slate-500">No routes yet.</p>
+          )}
           {routes.map((r) => {
             const isSelected = r.id === selectedRouteId;
             return (
@@ -363,6 +367,7 @@ export default function SafetyMap() {
             );
           })}
         </div>
+        <p className="mt-3 text-[10px] text-slate-500">{vibeTags.length} vibe tag{vibeTags.length === 1 ? "" : "s"} on map</p>
       </div>
     </div>
   );
