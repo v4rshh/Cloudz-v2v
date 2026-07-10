@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { createServiceClient, isSupabaseConfigured } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -10,9 +10,10 @@ export async function POST(request: Request) {
     }
 
     if (isSupabaseConfigured) {
+      const supabase = createServiceClient();
       const { data, error } = await supabase
         .from("users")
-        .insert({ phone, email, language_pref })
+        .insert({ phone, email, language_pref } as never)
         .select()
         .single();
 

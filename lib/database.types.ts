@@ -117,6 +117,7 @@ export interface Database {
           user_id: string | null;
           location: unknown;
           status: string;
+          resolved_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -125,6 +126,7 @@ export interface Database {
           user_id?: string | null;
           location: unknown;
           status?: string;
+          resolved_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -133,6 +135,7 @@ export interface Database {
           user_id?: string | null;
           location?: unknown;
           status?: string;
+          resolved_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
